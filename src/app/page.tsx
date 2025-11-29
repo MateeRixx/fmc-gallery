@@ -10,11 +10,12 @@ import 'swiper/css'
 import 'swiper/css/navigation'
 
 import Navbar from '@/components/Navbar'
+import EventCardBasic from '@/components/EventCardBasic'
 
 const events = [
-  { id: 1, name: 'KALTARANG', desc: 'Annual cultural fest of RGIPT featuring dance, drama, music, and art competitions.', bg: '/images/bg-kaltarang.jpg', cover: '/images/kaltarang-cover.jpg' },
-  { id: 2, name: 'URJOTSAV', desc: 'The techno-management fest with innovation, workshops, and competitions.', bg: '/images/bg-urjotsav.jpg', cover: '/images/urjotsav-cover.jpg' },
-  { id: 3, name: 'ENERGIA', desc: 'Annual sports meet with cricket, football, and athletics.', bg: '/images/bg-energia.jpg', cover: '/images/energia-cover.jpg' },
+  { id: 1, slug: 'kaltarang', name: 'KALTARANG', desc: 'Annual cultural fest of RGIPT featuring dance, drama, music, and art competitions.', bg: '/images/bg-kaltarang.jpg', cover: '/images/kaltarang-cover.jpg' },
+  { id: 2, slug: 'urjotsav', name: 'URJOTSAV', desc: 'The techno-management fest with innovation, workshops, and competitions.', bg: '/images/bg-urjotsav.jpg', cover: '/images/urjotsav-cover.jpg' },
+  { id: 3, slug: 'energia', name: 'ENERGIA', desc: 'Annual sports meet with cricket, football, and athletics.', bg: '/images/bg-energia.jpg', cover: '/images/energia-cover.jpg' },
 ]
 
 export default function Home() {
@@ -24,18 +25,29 @@ export default function Home() {
     target: eventsRef,
     offset: ["start end", "end start"]
   })
+  const cardsRef = useRef<HTMLDivElement>(null)
 
   // This creates the PERFECT black fade when scrolling down
   const overlayOpacity = useTransform(scrollYProgress, [0, 0.5], [0, 1])
   const eventBgOpacity = useTransform(scrollYProgress, [0.3, 0.7], [0, 1])
 
   const scrollToEvents = () => {
-    eventsRef.current?.scrollIntoView({ behavior: 'smooth' })
+    cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    if (window.location.hash === '#events') {
+      setTimeout(() => scrollToEvents(), 50)
+    }
+  }, [])
 
   return (
     <>
-      <Navbar onEventsClick={scrollToEvents} />
+      <Navbar onEventsClick={scrollToEvents} onHomeClick={scrollToTop} />
 
       {/* HERO BACKGROUND — always visible */}
       <div className="fixed inset-0 -z-20">
@@ -53,7 +65,7 @@ export default function Home() {
       {/* BLACK FADE OVERLAY — perfectly synced with scroll */}
       <motion.div
         style={{ opacity: overlayOpacity }}
-        className="fixed inset-0 -z-5 bg-black"
+        className="fixed inset-0 -z-10 bg-black"
       />
 
       {/* HERO — NO ANIMATION ON TEXT */}
@@ -73,54 +85,33 @@ export default function Home() {
       </section>
 
       {/* EVENTS SECTION */}
-      <section ref={eventsRef} className="relative min-h-screen py-32">
+      <section id="events" ref={eventsRef} className="relative min-h-screen pt-12 pb-12 scroll-mt-28">
         <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-center mb-24 text-6xl md:text-8xl font-black bg-gradient-to-r from-white to-purple-400 bg-clip-text text-transparent">
-            Our Events
-          </h2>
-
-          <Swiper
-            modules={[Navigation]}
-            spaceBetween={100}
-            slidesPerView={1}
-            centeredSlides
-            navigation={{ prevEl: '.prev', nextEl: '.next' }}
-            onSlideChange={(s) => {
-              setCurrentBg(events[s.activeIndex].bg)
-            }}
-          >
-            {events.map((event, i) => (
-              <SwiperSlide key={event.id}>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 max-w-6xl mx-auto items-center">
-                  <motion.div
-                    initial={{ opacity: 0, x: -100 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8 }}
-                    viewport={{ once: true }}
-                    className="bg-white/5 backdrop-blur-xl rounded-3xl p-12 border border-white/10 shadow-2xl"
-                  >
-                    <h3 className="font-ibarra text-6xl font-semibold text-white mb-8">{event.name}</h3>
-                    <p className="font-inter text-xl text-gray-300 leading-relaxed">{event.desc}</p>
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, x: 100 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8 }}
-                    viewport={{ once: true }}
-                    className="relative h-96 lg:h-full min-h-96 rounded-3xl overflow-hidden shadow-2xl"
-                  >
-                    <Image src={event.cover} alt={event.name} fill className="object-cover" />
-                  </motion.div>
-                </div>
+          <h2 className="text-center mb-8 text-5xl md:text-6xl font-black text-white">Our Events</h2>
+          <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
+            <Swiper
+              modules={[Navigation]}
+              spaceBetween={24}
+              slidesPerView={1}
+              centeredSlides
+              navigation={{ prevEl: '.prev', nextEl: '.next' }}
+              className="h-auto overflow-visible"
+              onSlideChange={(s) => {
+                setCurrentBg(events[s.activeIndex].bg)
+              }}
+            >
+              {events.map((event) => (
+                <SwiperSlide key={event.id}>
+                <EventCardBasic event={{ slug: event.slug, name: event.name, desc: event.desc, cover: event.cover }} />
               </SwiperSlide>
-            ))}
-          </Swiper>
+              ))}
+            </Swiper>
+          </div>
 
-          <button className="prev fixed left-10 top-1/2 -translate-y-1/2 z-50 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
+          <button className="prev fixed left-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
             <span className="text-4xl text-white">←</span>
           </button>
-          <button className="next" className="next fixed right-10 top-1/2 -translate-y-1/2 z-50 w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
+          <button className="next fixed right-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
             <span className="text-4xl text-white">→</span>
           </button>
         </div>

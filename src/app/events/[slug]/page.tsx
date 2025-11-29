@@ -1,7 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import ClientGallery from "./ClientGallery";
-import { EventData } from "./EventGalleryClient";
 
 
 const eventsData = {
@@ -41,14 +40,14 @@ const eventsData = {
     description: "Energia is the annual sports meet featuring competitive events and high energy.",
     bgImage: "/images/bg-energia.jpg",
     images: [
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
-      "/images/energia-cover.jpg",
+      "/gallery/energia/1.jpg",
+      "/gallery/energia/2.jpg",
+      "/gallery/energia/3.jpg",
+      "/gallery/energia/4.jpg",
+      "/gallery/energia/5.jpg",
+      "/gallery/energia/6.jpg",
+      "/gallery/energia/7.jpg",
+      "/gallery/energia/8.jpg",
     ],
   },
 } as const;

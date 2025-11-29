@@ -24,3 +24,16 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Fade-in animation — works everywhere */
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fadeIn {
+  opacity: 0;
+  transform: translateY(40px);
+  animation: fadeIn 0.8s ease-out forwards;
+}
