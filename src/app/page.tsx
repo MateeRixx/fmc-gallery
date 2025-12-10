@@ -85,9 +85,9 @@ export default function Home() {
       </section>
 
       {/* EVENTS SECTION */}
-      <section id="events" ref={eventsRef} className="relative min-h-screen pt-12 pb-12 scroll-mt-28">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-center mb-8 text-5xl md:text-6xl font-black text-white">Our Events</h2>
+      <section id="events" ref={eventsRef} className="relative py-32">
+        <div className="max-w-7xl mx-auto px-8">
+          <h2 className="text-center text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-20">Our Events</h2>
           <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
             <Swiper
               modules={[Navigation]}
