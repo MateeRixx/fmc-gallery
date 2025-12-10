@@ -1,6 +1,6 @@
 // src/components/EventCard.tsx
-import Image from 'next/image';
-import Link from 'next/link';
+import Image from "next/image";
+import Link from "next/link";
 
 interface Event {
   id: number;
@@ -8,7 +8,7 @@ interface Event {
   name: string;
   description: string;
   coverImage: string;
-  year: number;
+  // year: number; ← REMOVED — Supabase doesn't have it
 }
 
 interface Props {
@@ -43,7 +43,7 @@ export default function EventCard({ event, isActive = false }: Props) {
           <h3 className="text-3xl font-black mb-2 text-white">{event.name}</h3>
           <p className="text-gray-300 text-sm mb-4 leading-relaxed">{event.description}</p>
           <div className="flex items-center justify-between">
-            <span className="text-purple-400 font-semibold">{event.year}</span>
+            {/* Removed year — no longer needed */}
             <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:bg-purple-500/40 transition">
               →
             </div>
