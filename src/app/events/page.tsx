@@ -1,60 +1,106 @@
 // src/app/events/page.tsx
-'use client'; // Enables client-side features like Swiper
+"use client";
 
-import { useState } from 'react';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
+import { useState, useEffect } from "react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Navigation, Pagination } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/navigation";
+import "swiper/css/pagination";
 
-// Import your new components (we'll create them next)
-import Navbar from '@/components/Navbar';
-import EventCard from '@/components/EventCard';
+import Navbar from "@/components/Navbar";
+import EventCard from "@/components/EventCard";
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-// Dummy events data (replace with Supabase on Day 3)
-const dummyEvents = [
-  {
-    id: 1,
-    slug: 'kaltarang',
-    name: 'Kaltarang',
-    description: 'NITF Cultural Fest',
-    coverImage: '/images/kaltarang-cover.jpg', // Add your Figma card image here
-    year: 2024,
-  },
-  {
-    id: 2,
-    slug: 'urjotsav',
-    name: 'Urjotsav',
-    description: 'NITF Technical Fest',
-    coverImage: '/images/urjotsav-cover.jpg',
-    year: 2024,
-  },
-  {
-    id: 3,
-    slug: 'energia',
-    name: 'Energia',
-    description: 'Sports Day of NITF',
-    coverImage: '/images/energia-cover.jpg',
-    year: 2024,
-  },
-];
+type Event = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  cover_url: string;
+};
 
 export default function EventsPage() {
-  const [activeEvent, setActiveEvent] = useState(dummyEvents[0]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [activeEvent, setActiveEvent] = useState<Event | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchEvents() {
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        setConfigError("Supabase is not configured");
+        setLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, slug, name, description, cover_url")
+        .order("id", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching events:", error);
+      } else {
+        setEvents(data || []);
+        if (data && data.length > 0) {
+          setActiveEvent(data[0]);
+        }
+      }
+      setLoading(false);
+    }
+
+    fetchEvents();
+  }, []);
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <p className="text-3xl">Loading events...</p>
+        </div>
+      </>
+    );
+  }
+
+  if (configError) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <p className="text-3xl">{configError}</p>
+        </div>
+      </>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <>
+        <Navbar />
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <p className="text-4xl">No events yet — add one in /admin!</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <Navbar />
       <div className="min-h-screen bg-black text-white py-20">
-        {/* Title Section - Matches Figma centering */}
+        {/* Title */}
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-16 bg-gradient-to-r from-white to-purple-400 bg-clip-text text-transparent">
             Our Events
           </h1>
         </div>
 
-        {/* Swipeable Cards - Exact Figma horizontal layout */}
+        {/* Swiper Gallery */}
         <div className="max-w-7xl mx-auto px-6">
           <Swiper
             modules={[Navigation, Pagination]}
@@ -64,16 +110,25 @@ export default function EventsPage() {
             grabCursor={true}
             pagination={{ clickable: true }}
             navigation={true}
-            onSlideChange={(swiper) => setActiveEvent(dummyEvents[swiper.activeIndex])}
             breakpoints={{
               640: { slidesPerView: 2.2 },
               1024: { slidesPerView: 3.2 },
             }}
+            onSlideChange={(swiper) => setActiveEvent(events[swiper.activeIndex])}
             className="event-swiper"
           >
-            {dummyEvents.map((event) => (
+            {events.map((event) => (
               <SwiperSlide key={event.id}>
-                <EventCard event={event} isActive={activeEvent.id === event.id} />
+                <EventCard
+                  event={{
+                    id: event.id,
+                    slug: event.slug,
+                    name: event.name,
+                    description: event.description,
+                    coverImage: event.cover_url,
+                  }}
+                  isActive={activeEvent?.id === event.id}
+                />
               </SwiperSlide>
             ))}
           </Swiper>
