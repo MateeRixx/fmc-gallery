@@ -13,34 +13,62 @@ export default function AdminForm() {
   const [slug, setSlug] = useState("");
   const [desc, setDesc] = useState("");
   const [cover, setCover] = useState<File | null>(null);
-  const [bg, setBg] = useState<File | null>(null);
+  const [coverUrl, setCoverUrl] = useState("");
   const [status, setStatus] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("Uploading...");
+    setStatus("Submitting...");
 
     try {
-      const coverPath = `covers/${Date.now()}-${cover!.name}`;
-      const bgPath = `bgs/${Date.now()}-${bg!.name}`;
+      const { data: existing, error: checkErr } = await supabase
+        .from("events")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (checkErr) {
+        setStatus("Error — try again");
+        return;
+      }
+      if (existing) {
+        setStatus("Slug already exists — choose another");
+        return;
+      }
 
-      await supabase.storage.from("event-images").upload(coverPath, cover!);
-      await supabase.storage.from("event-images").upload(bgPath, bg!);
+      let finalCoverUrl = coverUrl.trim();
 
-      const { data: coverData } = supabase.storage.from("event-images").getPublicUrl(coverPath);
-      const { data: bgData } = supabase.storage.from("event-images").getPublicUrl(bgPath);
+      if (cover) {
+        const fd = new FormData();
+        fd.append("file", cover);
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(json.error || "Upload failed");
+          return;
+        }
+        finalCoverUrl = json.url;
+      }
 
-      await supabase.from("events").insert({
-        name,
-        slug,
-        description: desc,
-        cover_url: coverData.publicUrl,
-        bg_url: bgData.publicUrl,
+      if (!finalCoverUrl) {
+        setStatus("Provide a cover image (file or URL)");
+        return;
+      }
+
+      const res = await fetch("/api/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, slug, description: desc, cover_url: finalCoverUrl }),
       });
+      const json = await res.json();
 
-      setStatus("SUCCESS! Event added.");
-      setName(""); setSlug(""); setDesc(""); setCover(null); setBg(null);
-    } catch (err) {
+      if (res.ok) {
+        setStatus("Event added! Refreshing homepage...");
+        await fetch("/api/revalidate?path=/", { method: "POST" });
+        setName(""); setSlug(""); setDesc(""); setCover(null); setCoverUrl("");
+      } else {
+        setStatus(json.error || "Insert failed");
+      }
+    } catch {
       setStatus("Error — try again");
     }
   };
@@ -62,8 +90,8 @@ export default function AdminForm() {
       <input placeholder="Event Name" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white" required />
       <input placeholder="Slug (e.g. kaltarang)" value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))} className="w-full p-4 bg-white/10 rounded-xl text-white" required />
       <textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white h-32" required />
-      <input type="file" accept="image/*" onChange={e => setCover(e.target.files?.[0] || null)} required />
-      <input type="file" accept="image/*" onChange={e => setBg(e.target.files?.[0] || null)} required />
+      <input type="file" accept="image/*" onChange={e => setCover(e.target.files?.[0] || null)} />
+      <input placeholder="Cover Image URL (optional)" value={coverUrl} onChange={e => setCoverUrl(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white" />
       <button type="submit" className="w-full py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-2xl font-bold rounded-xl hover:scale-105 transition">
         ADD EVENT
       </button>
