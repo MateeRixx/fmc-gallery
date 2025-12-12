@@ -55,6 +55,11 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
               ABOUT US
             </Link>
           </li>
+          <li>
+            <Link href="/login" className="text-white hover:text-[#FFBF00] transition">
+              LOGIN
+            </Link>
+          </li>
         </ul>
       </div>
     </nav>
