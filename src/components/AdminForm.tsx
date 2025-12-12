@@ -46,7 +46,19 @@ export default function AdminForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 bg-white/5 backdrop-blur-xl rounded-3xl p-10 border border-white/20">
+    <>
+      <div className="flex justify-end mb-6">
+        <button
+          onClick={() => {
+            localStorage.removeItem("fmc-admin");
+            window.location.href = "/";
+          }}
+          className="text-red-400 hover:underline"
+        >
+          Logout
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-8 bg-white/5 backdrop-blur-xl rounded-3xl p-10 border border-white/20">
       <input placeholder="Event Name" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white" required />
       <input placeholder="Slug (e.g. kaltarang)" value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))} className="w-full p-4 bg-white/10 rounded-xl text-white" required />
       <textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white h-32" required />
@@ -56,6 +68,7 @@ export default function AdminForm() {
         ADD EVENT
       </button>
       <p className="text-2xl font-bold text-center">{status}</p>
-    </form>
+      </form>
+    </>
   );
 }
