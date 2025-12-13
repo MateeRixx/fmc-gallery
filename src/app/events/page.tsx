@@ -29,6 +29,7 @@ export default function EventsPage() {
   const [activeEvent, setActiveEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
+  const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
 
   useEffect(() => {
     async function fetchEvents() {
@@ -125,7 +126,7 @@ export default function EventsPage() {
                     slug: event.slug,
                     name: event.name,
                     description: event.description,
-                    coverImage: event.cover_url,
+                    coverImage: sanitize(event.cover_url),
                   }}
                   isActive={activeEvent?.id === event.id}
                 />

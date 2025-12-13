@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file") as File | null;
     const dirRaw = (form.get("dir") as string) || "covers";
-    const dir = dirRaw === "backgrounds" ? "backgrounds" : "covers";
+    const dir = dirRaw.replace(/\.\./g, "").replace(/^\/+|\/+$/g, "") || "covers";
     if (!file) {
       return Response.json({ error: "No file provided" }, { status: 400 });
     }

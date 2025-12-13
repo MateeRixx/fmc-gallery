@@ -40,8 +40,8 @@ export default function EventCard({ event, isActive = false }: Props) {
 
         {/* Content */}
         <div className="absolute bottom-6 left-6 right-6">
-          <h3 className="text-3xl font-black mb-2 text-white">{event.name}</h3>
-          <p className="text-gray-300 text-sm mb-4 leading-relaxed">{event.description}</p>
+          <h3 className="text-2xl font-black mb-2 text-white h-12 overflow-hidden">{event.name}</h3>
+          <p className="text-gray-300 text-sm mb-4 leading-relaxed h-16 overflow-hidden">{event.description}</p>
           <div className="flex items-center justify-between">
             {/* Removed year — no longer needed */}
             <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:bg-purple-500/40 transition">

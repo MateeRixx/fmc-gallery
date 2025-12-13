@@ -11,15 +11,16 @@ import 'swiper/css/navigation'
 
 import Navbar from '@/components/Navbar'
 import EventCardBasic from '@/components/EventCardBasic'
+import { createClient } from '@supabase/supabase-js'
 
-const events = [
-  { id: 1, slug: 'kaltarang', name: 'KALTARANG', desc: 'Annual cultural fest of RGIPT featuring dance, drama, music, and art competitions.', bg: '/images/bg-kaltarang.jpg', cover: '/images/kaltarang-cover.jpg' },
-  { id: 2, slug: 'urjotsav', name: 'URJOTSAV', desc: 'The techno-management fest with innovation, workshops, and competitions.', bg: '/images/bg-urjotsav.jpg', cover: '/images/urjotsav-cover.jpg' },
-  { id: 3, slug: 'energia', name: 'ENERGIA', desc: 'Annual sports meet with cricket, football, and athletics.', bg: '/images/bg-energia.jpg', cover: '/images/energia-cover.jpg' },
-]
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function Home() {
   const [currentBg, setCurrentBg] = useState('/images/hero.jpg')
+  const [events, setEvents] = useState<Array<{ id: number; slug: string; name: string; description: string; cover_url: string; bg_url?: string | null }>>([])
   const eventsRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
     target: eventsRef,
@@ -43,6 +44,22 @@ export default function Home() {
     if (window.location.hash === '#events') {
       setTimeout(() => scrollToEvents(), 50)
     }
+  }, [])
+
+  useEffect(() => {
+    const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
+    async function fetchEvents() {
+      const { data } = await supabase
+        .from('events')
+        .select('id, slug, name, description, cover_url, bg_url')
+        .order('id', { ascending: true })
+      setEvents(data || [])
+      if (data && data.length > 0) {
+        const firstBg = sanitize(data[0]?.bg_url) || '/images/hero.jpg'
+        setCurrentBg(firstBg)
+      }
+    }
+    fetchEvents()
   }, [])
 
   return (
@@ -97,12 +114,14 @@ export default function Home() {
               navigation={{ prevEl: '.prev', nextEl: '.next' }}
               className="h-auto overflow-visible"
               onSlideChange={(s) => {
-                setCurrentBg(events[s.activeIndex].bg)
+                const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
+                const bg = sanitize(events[s.activeIndex]?.bg_url) || '/images/hero.jpg'
+                setCurrentBg(bg)
               }}
             >
-              {events.map((event) => (
-                <SwiperSlide key={event.id}>
-                <EventCardBasic event={{ slug: event.slug, name: event.name, desc: event.desc, cover: event.cover }} />
+              {events.map((ev) => (
+                <SwiperSlide key={ev.id}>
+                <EventCardBasic event={{ slug: ev.slug, name: ev.name, desc: ev.description, cover: (ev.cover_url || '').trim().replace(/\)+$/, '') }} />
               </SwiperSlide>
               ))}
             </Swiper>
