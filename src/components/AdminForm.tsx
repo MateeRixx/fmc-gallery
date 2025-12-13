@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,7 +63,7 @@ export default function AdminForm() {
       const json = await res.json();
 
       if (res.ok) {
-        setStatus("Event added! Refreshing homepage...");
+        setStatus("SUCCESS!");
         await fetch("/api/revalidate?path=/", { method: "POST" });
         setName(""); setSlug(""); setDesc(""); setCover(null); setCoverUrl("");
       } else {
@@ -81,7 +82,7 @@ export default function AdminForm() {
             localStorage.removeItem("fmc-admin");
             window.location.href = "/";
           }}
-          className="text-red-400 hover:underline"
+          className="px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition"
         >
           Logout
         </button>
@@ -97,6 +98,11 @@ export default function AdminForm() {
       </button>
       <p className="text-2xl font-bold text-center">{status}</p>
       </form>
+      <div className="text-center mt-12">
+        <Link href="/" className="inline-block px-10 py-5 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition">
+          ← Back to Home
+        </Link>
+      </div>
     </>
   );
 }
