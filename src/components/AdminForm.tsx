@@ -40,30 +40,25 @@ export default function AdminForm() {
         return;
       }
 
-      const coverPath = `covers/${slug}-${Date.now()}-${cover.name}`;
-      const { error: coverError } = await supabase.storage
-        .from("event-images")
-        .upload(coverPath, cover);
-      if (coverError) {
-        setStatus(`Error: ${coverError.message}`);
+      const coverFd = new FormData();
+      coverFd.append("file", cover);
+      coverFd.append("dir", "covers");
+      const coverRes = await fetch("/api/upload", { method: "POST", body: coverFd });
+      const coverJson = await coverRes.json();
+      if (!coverRes.ok) {
+        setStatus(coverJson.error || "Upload failed");
         return;
       }
 
-      const bgPath = `backgrounds/${slug}-${Date.now()}-${bg.name}`;
-      const { error: bgError } = await supabase.storage
-        .from("event-images")
-        .upload(bgPath, bg);
-      if (bgError) {
-        setStatus(`Error: ${bgError.message}`);
+      const bgFd = new FormData();
+      bgFd.append("file", bg);
+      bgFd.append("dir", "backgrounds");
+      const bgRes = await fetch("/api/upload", { method: "POST", body: bgFd });
+      const bgJson = await bgRes.json();
+      if (!bgRes.ok) {
+        setStatus(bgJson.error || "Upload failed");
         return;
       }
-
-      const coverUrl = supabase.storage
-        .from("event-images")
-        .getPublicUrl(coverPath).data.publicUrl;
-      const bgUrl = supabase.storage
-        .from("event-images")
-        .getPublicUrl(bgPath).data.publicUrl;
 
       const res = await fetch("/api/admin/events", {
         method: "POST",
@@ -72,8 +67,8 @@ export default function AdminForm() {
           name,
           slug,
           description: desc,
-          cover_url: coverUrl,
-          bg_url: bgUrl,
+          cover_url: coverJson.url,
+          bg_url: bgJson.url,
         }),
       });
       if (!res.ok) {

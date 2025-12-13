@@ -9,12 +9,14 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("file") as File | null;
+    const dirRaw = (form.get("dir") as string) || "covers";
+    const dir = dirRaw === "backgrounds" ? "backgrounds" : "covers";
     if (!file) {
       return Response.json({ error: "No file provided" }, { status: 400 });
     }
 
     const ext = file.name.split(".").pop() || "bin";
-    const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
     const { error } = await supabase.storage
       .from("event-images")
