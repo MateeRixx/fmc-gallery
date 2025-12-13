@@ -14,12 +14,16 @@ export default function AdminForm() {
   const [slug, setSlug] = useState("");
   const [desc, setDesc] = useState("");
   const [cover, setCover] = useState<File | null>(null);
-  const [coverUrl, setCoverUrl] = useState("");
+  const [bg, setBg] = useState<File | null>(null);
   const [status, setStatus] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("Submitting...");
+    if (!name || !slug || !desc || !cover || !bg) {
+      setStatus("Please fill all fields and select both images");
+      return;
+    }
+    setStatus("Uploading images...");
 
     try {
       const { data: existing, error: checkErr } = await supabase
@@ -36,41 +40,58 @@ export default function AdminForm() {
         return;
       }
 
-      let finalCoverUrl = coverUrl.trim();
-
-      if (cover) {
-        const fd = new FormData();
-        fd.append("file", cover);
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const json = await res.json();
-        if (!res.ok) {
-          setStatus(json.error || "Upload failed");
-          return;
-        }
-        finalCoverUrl = json.url;
-      }
-
-      if (!finalCoverUrl) {
-        setStatus("Provide a cover image (file or URL)");
+      const coverPath = `covers/${slug}-${Date.now()}-${cover.name}`;
+      const { error: coverError } = await supabase.storage
+        .from("event-images")
+        .upload(coverPath, cover);
+      if (coverError) {
+        setStatus(`Error: ${coverError.message}`);
         return;
       }
+
+      const bgPath = `backgrounds/${slug}-${Date.now()}-${bg.name}`;
+      const { error: bgError } = await supabase.storage
+        .from("event-images")
+        .upload(bgPath, bg);
+      if (bgError) {
+        setStatus(`Error: ${bgError.message}`);
+        return;
+      }
+
+      const coverUrl = supabase.storage
+        .from("event-images")
+        .getPublicUrl(coverPath).data.publicUrl;
+      const bgUrl = supabase.storage
+        .from("event-images")
+        .getPublicUrl(bgPath).data.publicUrl;
 
       const res = await fetch("/api/admin/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, slug, description: desc, cover_url: finalCoverUrl }),
+        body: JSON.stringify({
+          name,
+          slug,
+          description: desc,
+          cover_url: coverUrl,
+          bg_url: bgUrl,
+        }),
       });
-      const json = await res.json();
-
-      if (res.ok) {
-        setStatus("SUCCESS!");
-        await fetch("/api/revalidate?path=/", { method: "POST" });
-        setName(""); setSlug(""); setDesc(""); setCover(null); setCoverUrl("");
-      } else {
-        setStatus(json.error || "Insert failed");
+      if (!res.ok) {
+        let msg = "Insert failed";
+        try {
+          const j = await res.json();
+          msg = (j as { error?: string }).error ?? msg;
+        } catch {}
+        setStatus(msg);
+        return;
       }
-    } catch {
-      setStatus("Error — try again");
+
+      setStatus("SUCCESS! Event added — refresh homepage");
+      await fetch("/api/revalidate?path=/", { method: "POST" });
+      setName(""); setSlug(""); setDesc(""); setCover(null); setBg(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unexpected error";
+      setStatus(`Error: ${msg}`);
     }
   };
 
@@ -92,7 +113,7 @@ export default function AdminForm() {
       <input placeholder="Slug (e.g. kaltarang)" value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))} className="w-full p-4 bg-white/10 rounded-xl text-white" required />
       <textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white h-32" required />
       <input type="file" accept="image/*" onChange={e => setCover(e.target.files?.[0] || null)} />
-      <input placeholder="Cover Image URL (optional)" value={coverUrl} onChange={e => setCoverUrl(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white" />
+      <input type="file" accept="image/*" onChange={e => setBg(e.target.files?.[0] || null)} />
       <button type="submit" className="w-full py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-2xl font-bold rounded-xl hover:scale-105 transition">
         ADD EVENT
       </button>
