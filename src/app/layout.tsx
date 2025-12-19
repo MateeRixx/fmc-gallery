@@ -2,20 +2,7 @@
 import type { Metadata } from "next";
 import './globals.css'
 
-// Your Figma fonts
-import { Ibarra_Real_Nova, Inter } from 'next/font/google'
-
-const ibarra = Ibarra_Real_Nova({
-  subsets: ['latin'],
-  weight: ['600'],           // SemiBold
-  variable: '--font-ibarra',
-})
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300'],           // Light
-  variable: '--font-inter',
-})
+// Fonts loaded via <link> to avoid Turbopack internal font resolution issues
 
 // Optional: Keep Geist if you want it as fallback, otherwise remove
 // import { Geist, Geist_Mono } from "next/font/google";
@@ -29,7 +16,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${ibarra.variable} ${inter.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Ibarra+Real+Nova:wght@600;700&family=Hepta+Slab:wght@400;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="font-sans bg-black text-white antialiased">
         {children}
       </body>

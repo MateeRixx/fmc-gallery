@@ -17,7 +17,7 @@ export default function AboutPage() {
           priority
           className="object-cover brightness-50"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/70 to-black" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/40 via-black/70 to-black" />
       </div>
 
       {/* Content */}
@@ -60,7 +60,7 @@ export default function AboutPage() {
               href="https://www.instagram.com/fmcrgipt/"
               target="_blank"
               aria-label="Instagram FMC RGIPT"
-              className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full hover:from-purple-700 hover:to-pink-700 hover:scale-105 transition-all duration-300 shadow-2xl"
+              className="flex items-center justify-center w-16 h-16 bg-linear-to-r from-purple-600 to-pink-600 rounded-full hover:from-purple-700 hover:to-pink-700 hover:scale-105 transition-all duration-300 shadow-2xl"
             >
               <Image
                 src="/icons/instagram.svg"

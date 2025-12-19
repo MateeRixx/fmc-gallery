@@ -3,10 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ClientGallery from "./ClientGallery";
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  throw new Error('Missing Supabase environment variables')
+}
  
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
  
 export default function Page({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ test?: string }> }) {
@@ -20,18 +24,31 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
   useEffect(() => {
      let cancelled = false;
      async function run() {
-       const { data: ev } = await supabase
-         .from("events")
-         .select("name, description, bg_url")
-         .eq("slug", slug)
-         .maybeSingle();
-       if (!cancelled) setEvent(ev ?? null);
-       const { data: ph } = await supabase
-         .from("photos")
-         .select("url")
-         .eq("event_slug", slug)
-         .order("id", { ascending: true });
-       if (!cancelled) setPhotos((ph || []).map(r => sanitize(r.url)));
+       try {
+         const { data: ev, error: evError } = await supabase
+           .from("events")
+           .select("name, description, bg_url")
+           .eq("slug", slug)
+           .maybeSingle();
+         
+         if (evError) {
+           console.error("Error fetching event:", evError);
+         }
+         if (!cancelled) setEvent(ev ?? null);
+
+         const { data: ph, error: phError } = await supabase
+           .from("photos")
+           .select("url")
+           .eq("event_slug", slug)
+           .order("id", { ascending: true });
+         
+         if (phError) {
+           console.error("Error fetching photos:", phError);
+         }
+         if (!cancelled) setPhotos((ph || []).map(r => sanitize(r.url)));
+       } catch (err) {
+         console.error("Fetch error:", err);
+       }
      }
      run();
      return () => {

@@ -19,9 +19,9 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.4 }}
         viewport={{ once: true }}
-        className="cursor-pointer w-[17.6rem] md:w-[22rem] mx-auto my-8 md:my-12 bg-white rounded-3xl overflow-hidden shadow-2xl"
+        className="cursor-pointer w-[17.6rem] md:w-88] mx-auto my-8 md:my-12 bg-white rounded-3xl overflow-hidden shadow-2xl"
       >
-        <div className="relative aspect-[4/5]">
+        <div className="relative aspect-4/5">
           <Image src={event.cover} alt={event.name} fill className="object-cover" />
         </div>
         <div className="px-4 py-4 text-center">

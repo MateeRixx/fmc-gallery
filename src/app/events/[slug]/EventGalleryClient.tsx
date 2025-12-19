@@ -98,7 +98,7 @@ export default function EventGalleryClient({ slug, event, testMode }: { slug: st
               <div key={i} className="opacity-0 translate-y-10 animate-fadeIn" style={{ animationDelay: `${i * 0.2}s`, animationFillMode: "forwards" }}>
                 <div className="group relative overflow-hidden rounded-2xl shadow-2xl">
                   <GalleryImage src={src} alt={`${event.name} gallery ${i + 1}`} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 </div>
               </div>
             ))}

@@ -13,9 +13,13 @@ import Navbar from '@/components/Navbar'
 import EventCardBasic from '@/components/EventCardBasic'
 import { createClient } from '@supabase/supabase-js'
 
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  throw new Error('Missing Supabase environment variables')
+}
+
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
 export default function Home() {
@@ -49,14 +53,24 @@ export default function Home() {
   useEffect(() => {
     const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
     async function fetchEvents() {
-      const { data } = await supabase
-        .from('events')
-        .select('id, slug, name, description, cover_url, bg_url')
-        .order('id', { ascending: true })
-      setEvents(data || [])
-      if (data && data.length > 0) {
-        const firstBg = sanitize(data[0]?.bg_url) || '/images/hero.jpg'
-        setCurrentBg(firstBg)
+      try {
+        const { data, error } = await supabase
+          .from('events')
+          .select('id, slug, name, description, cover_url, bg_url')
+          .order('id', { ascending: true })
+        
+        if (error) {
+          console.error('Failed to fetch events:', error.message)
+          return
+        }
+        
+        setEvents(data || [])
+        if (data && data.length > 0) {
+          const firstBg = sanitize(data[0]?.bg_url) || '/images/hero.jpg'
+          setCurrentBg(firstBg)
+        }
+      } catch (err) {
+        console.error('Error fetching events:', err)
       }
     }
     fetchEvents()
@@ -104,7 +118,7 @@ export default function Home() {
       {/* EVENTS SECTION */}
       <section id="events" ref={eventsRef} className="relative py-32">
         <div className="max-w-7xl mx-auto px-8">
-          <h2 className="text-center text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-20">Our Events</h2>
+          <h2 className="text-center text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-pink-400 mb-20">Our Events</h2>
           <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
             <Swiper
               modules={[Navigation]}
@@ -121,7 +135,7 @@ export default function Home() {
             >
               {events.map((ev) => (
                 <SwiperSlide key={ev.id}>
-                <EventCardBasic event={{ slug: ev.slug, name: ev.name, desc: ev.description, cover: (ev.cover_url || '').trim().replace(/\)+$/, '') }} />
+                <EventCardBasic event={{ slug: ev.slug, name: ev.name, desc: ev.description, cover: ((ev.cover_url || '').trim().replace(/\)+$/, '')) }} />
               </SwiperSlide>
               ))}
             </Swiper>
