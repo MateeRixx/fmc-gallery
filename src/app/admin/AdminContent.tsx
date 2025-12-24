@@ -28,9 +28,15 @@ export default function AdminContent({ events: initial }: { events: { id: number
   async function fetchEvents() {
     try {
       const res = await fetch("/api/admin/events", { method: "GET" });
+      if (!res.ok) {
+        console.error(`API error: ${res.status}`, res);
+        setEvents([]);
+        return;
+      }
       const j = await res.json();
       setEvents((j && j.data) || []);
-    } catch {
+    } catch (err) {
+      console.error("Failed to fetch events:", err);
       setEvents([]);
     }
   }
@@ -43,19 +49,27 @@ export default function AdminContent({ events: initial }: { events: { id: number
   return (
     <div className="min-h-screen bg-black text-white py-20">
       <div className="max-w-4xl mx-auto px-6 text-center">
-        <h1 className="text-7xl font-black mb-8 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+        <h1 className="text-7xl font-black mb-8 text-white">
           ADMIN PANEL
         </h1>
         <AdminForm editingId={editingId} onSuccess={fetchEvents} />
-        <button
-          onClick={() => {
-            localStorage.removeItem("fmc-admin");
-            window.location.href = "/";
-          }}
-          className="mt-8 px-8 py-4 bg-red-600 text-white rounded-full hover:bg-red-700"
-        >
-          Logout
-        </button>
+        <div className="mt-8 flex gap-4 justify-center">
+          <button
+            onClick={() => {
+              localStorage.removeItem("fmc-admin");
+              window.location.href = "/";
+            }}
+            className="px-8 py-4 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-bold"
+          >
+            Logout
+          </button>
+          <button
+            onClick={() => window.location.href = "/"}
+            className="px-8 py-4 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition font-bold"
+          >
+            Back to Home
+          </button>
+        </div>
         <div className="mt-12 text-left">
           <h2 className="text-3xl font-bold mb-6">Existing Events</h2>
           {events.map((ev) => (

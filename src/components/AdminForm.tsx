@@ -4,12 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
-// src/components/AdminForm.tsx
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from "@/lib/supabase";
 
 export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?: number | null; editingId?: number | null; onSuccess?: () => void }) {
   const currentId = editingId ?? eventId ?? null;
@@ -27,8 +22,8 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       if (!currentId) return;
       setStatus("Loading event...");
       try {
-        const res = await fetch(`/api/admin/events?id=${currentId}`, { method: "GET" });
-        const j = await res.json();
+        const loadRes = await fetch(`/api/admin/events?id=${currentId}`, { method: "GET" });
+        const j = await loadRes.json();
         const ev = j?.data;
         if (ev) {
           setName(ev.name || "");
@@ -55,16 +50,26 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
     }
 
     try {
-      const { data: existingSlug } = await supabase
-        .from("events")
-        .select("id")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (!currentId && existingSlug) {
-        setStatus("Slug already exists — choose another");
+      const slugRes = await fetch("/api/admin/events/check-slug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, excludeId: currentId }),
+      });
+      
+      if (!slugRes.ok) {
+        setStatus(`❌ Server error: ${slugRes.status}`);
         return;
       }
-      if (currentId && existingSlug && existingSlug.id !== currentId) {
+
+      let slugCheck;
+      try {
+        slugCheck = await slugRes.json();
+      } catch {
+        setStatus("❌ Invalid response from server");
+        return;
+      }
+
+      if (slugCheck.exists) {
         setStatus("Slug already exists — choose another");
         return;
       }
@@ -123,14 +128,14 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         ...(bgUrl ? { bg_url: bgUrl } : {}),
       };
 
-      const res = await fetch("/api/admin/events", {
+      const eventRes = await fetch("/api/admin/events", {
         method: currentId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(currentId ? { id: currentId, ...payload } : payload),
       });
 
-      if (!res.ok) {
-        const j = await res.json();
+      if (!eventRes.ok) {
+        const j = await eventRes.json();
         setStatus(j.error || "Failed");
         return;
       }
@@ -155,9 +160,12 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
             localStorage.removeItem("fmc-admin");
             window.location.href = "/";
           }}
-          className="px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition"
+          className="group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-8 py-2 text-neutral-50 font-bold"
         >
-          Logout
+          <span className="relative z-10">Logout</span>
+          <span className="absolute inset-0 overflow-hidden rounded-md">
+            <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+          </span>
         </button>
       </div>
 
@@ -167,15 +175,21 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         <textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} className="w-full p-4 bg-white/10 rounded-xl text-white h-32" required />
         <input type="file" accept="image/*" onChange={e => setCover(e.target.files?.[0] || null)} />
         <input type="file" accept="image/*" onChange={e => setBg(e.target.files?.[0] || null)} />
-        <button type="submit" className="w-full py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-2xl font-bold rounded-xl hover:scale-105 transition">
-          {currentId ? "UPDATE EVENT" : "ADD EVENT"}
+        <button type="submit" className="w-full group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-8 py-2 text-neutral-50 text-2xl font-bold">
+          <span className="relative z-10">{currentId ? "UPDATE EVENT" : "ADD EVENT"}</span>
+          <span className="absolute inset-0 overflow-hidden rounded-md">
+            <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+          </span>
         </button>
         <p className="text-2xl font-bold text-center">{status}</p>
       </form>
 
       <div className="text-center mt-12">
-        <Link href="/" className="inline-block px-10 py-5 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition">
-          ← Back to Home
+        <Link href="/" className="inline-block group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-10 py-2 text-neutral-50 font-bold">
+          <span className="relative z-10">← Back to Home</span>
+          <span className="absolute inset-0 overflow-hidden rounded-md">
+            <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+          </span>
         </Link>
       </div>
     </>

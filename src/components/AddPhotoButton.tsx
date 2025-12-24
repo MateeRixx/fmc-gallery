@@ -54,7 +54,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
           body: JSON.stringify({ event_slug: eventSlug, url }),
         });
 
-        const result = await response.json();
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          console.error("Invalid JSON response from server");
+          throw new Error(`Database error: Invalid response from server`);
+        }
 
         if (!response.ok) {
           console.error("Failed to save photo URL:", result.error);
@@ -80,9 +86,12 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     <>
       <button 
         onClick={() => setShowForm(true)} 
-        className="fixed bottom-8 right-8 z-40 w-16 h-16 bg-linear-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center justify-center text-3xl font-bold"
+        className="fixed bottom-8 right-8 z-40 group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-8 py-2 text-neutral-50 font-bold text-lg shadow-2xl flex items-center justify-center"
       >
-        +
+        <span className="relative z-10">+ Add Photos</span>
+        <span className="absolute inset-0 overflow-hidden rounded-md">
+          <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+        </span>
       </button>
 
       {showForm && (
@@ -114,15 +123,21 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
               <button 
                 onClick={handleUpload}
                 disabled={files.length === 0}
-                className="flex-1 bg-linear-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 text-neutral-50 font-bold py-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Upload
+                <span className="relative z-10">Upload</span>
+                <span className="absolute inset-0 overflow-hidden rounded-md">
+                  <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+                </span>
               </button>
               <button 
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-800 text-white font-bold py-3 rounded-lg hover:bg-gray-700 transition border border-gray-600"
+                className="flex-1 group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 text-neutral-50 font-bold py-3"
               >
-                Cancel
+                <span className="relative z-10">Cancel</span>
+                <span className="absolute inset-0 overflow-hidden rounded-md">
+                  <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:-translate-x-0 group-hover:scale-150"></span>
+                </span>
               </button>
             </div>
           </div>

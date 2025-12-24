@@ -96,7 +96,7 @@ export default function EventsPage() {
       <div className="min-h-screen bg-black text-white py-20">
         {/* Title */}
         <div className="max-w-7xl mx-auto px-6 text-center">
-          <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-16 bg-gradient-to-r from-white to-purple-400 bg-clip-text text-transparent">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-16 text-white">
             Our Events
           </h1>
         </div>

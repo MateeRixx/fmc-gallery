@@ -1,12 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  try {
+    return getSupabaseServer();
+  } catch (err: any) {
+    console.error("Supabase initialization failed:", err.message);
+    throw err;
+  }
+}
 
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabase();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     if (idParam) {
@@ -32,42 +37,48 @@ export async function GET(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ data });
-  } catch {
-    return Response.json({ error: "Fetch failed" }, { status: 500 });
+  } catch (err: any) {
+    console.error("GET /api/admin/events error:", err);
+    return Response.json({ error: err.message || "Fetch failed" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
     const { name, slug, description, cover_url, bg_url } = body || {};
+    
+    console.log("POST /api/admin/events - Received:", { name, slug, description, cover_url: !!cover_url, bg_url: !!bg_url });
+    
     if (!name || !slug || !description || !cover_url) {
-      return Response.json({ error: "Missing fields" }, { status: 400 });
+      console.error("Missing required fields");
+      return Response.json({ error: "Missing fields: name, slug, description, cover_url" }, { status: 400 });
     }
 
     const row: Record<string, unknown> = { name, slug, description, cover_url };
     if (bg_url) row.bg_url = bg_url;
 
-    const { error } = await supabase.from("events").insert(row);
+    console.log("Inserting into events table:", row);
+    
+    const { data, error } = await supabase.from("events").insert(row).select();
+    
     if (error) {
-      // Fallback: if bg_url column doesn't exist, insert without it
-      if (/bg_url/i.test(error.message)) {
-        const { error: retryErr } = await supabase.from("events").insert({ name, slug, description, cover_url });
-        if (retryErr) {
-          return Response.json({ error: retryErr.message }, { status: 500 });
-        }
-      } else {
-        return Response.json({ error: error.message }, { status: 500 });
-      }
+      console.error("Insert error:", error);
+      return Response.json({ error: error.message }, { status: 500 });
     }
-    return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Insert failed" }, { status: 500 });
+
+    console.log("Successfully inserted event:", data);
+    return Response.json({ ok: true, data });
+  } catch (err: any) {
+    console.error("POST /api/admin/events error:", err);
+    return Response.json({ error: err.message || "Insert failed" }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
     const { id, name, slug, description, cover_url, bg_url } = body || {};
     if (!id || !Number.isFinite(Number(id))) {
@@ -87,13 +98,15 @@ export async function PUT(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Update failed" }, { status: 500 });
+  } catch (err: any) {
+    console.error("PUT /api/admin/events error:", err);
+    return Response.json({ error: err.message || "Update failed" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const supabase = getSupabase();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     let id = idParam ? Number(idParam) : undefined;
@@ -109,7 +122,8 @@ export async function DELETE(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Delete failed" }, { status: 500 });
+  } catch (err: any) {
+    console.error("DELETE /api/admin/events error:", err);
+    return Response.json({ error: err.message || "Delete failed" }, { status: 500 });
   }
 }

@@ -101,24 +101,28 @@ export default function Home() {
 
       {/* HERO — NO ANIMATION ON TEXT */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6">
-        <h1 className="mb-4 text-6xl md:text-8xl lg:text-9xl font-black text-white drop-shadow-2xl tracking-tighter">
+        <h1 className="mb-4 text-6xl md:text-8xl lg:text-8xl font-black text-white drop-shadow-2xl tracking-tighter">
           THE FILM & MEDIA CLUB
         </h1>
         <p className="mb-10 text-2xl md:text-4xl text-white/90 font-medium drop-shadow-lg">
           RAJIV GANDHI INSTITUTE OF PETROLEUM TECHNOLOGY
         </p>
-        <button
+        <button 
           onClick={scrollToEvents}
-          className="rounded-full bg-white px-14 py-7 text-xl font-bold text-black shadow-2xl hover:scale-110 transition"
+          className="group relative h-12 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-8 py-2 text-neutral-50 ;
+          "
         >
-          Explore Events
+          <span className="relative z-10">Explore Events</span>
+          <span className="absolute inset-0 overflow-hidden rounded-md">
+            <span className="absolute left-0 aspect-square w-full origin-center -translate-x-full rounded-full bg-[#FFBF00] transition-all duration-500 group-hover:translate-x-0 group-hover:scale-150"></span>
+          </span>
         </button>
       </section>
 
       {/* EVENTS SECTION */}
       <section id="events" ref={eventsRef} className="relative py-32">
         <div className="max-w-7xl mx-auto px-8">
-          <h2 className="text-center text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-pink-400 mb-20">Our Events</h2>
+          <h2 className="text-center text-8xl md:text-9xl font-black text-white mb-20">Our Events</h2>
           <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
             <Swiper
               modules={[Navigation]}

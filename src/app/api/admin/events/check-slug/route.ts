@@ -3,11 +3,11 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { event_slug, url } = body;
+    const { slug, excludeId } = body;
 
-    if (!event_slug || !url) {
+    if (!slug || typeof slug !== "string") {
       return Response.json(
-        { error: "Missing event_slug or url" },
+        { error: "Missing slug" },
         { status: 400 }
       );
     }
@@ -22,21 +22,27 @@ export async function POST(request: Request) {
         { status: 503 }
       );
     }
+    
+    let query = supabase
+      .from("events")
+      .select("id")
+      .eq("slug", slug.toLowerCase().trim());
 
-    const { data, error } = await supabase
-      .from("photos")
-      .insert({ event_slug, url })
-      .select();
+    if (excludeId) {
+      query = query.neq("id", excludeId);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
-      console.error("Supabase insert error:", error);
+      console.error("Slug check error:", error);
       return Response.json(
         { error: error.message },
         { status: 500 }
       );
     }
 
-    return Response.json({ success: true, data });
+    return Response.json({ exists: !!data });
   } catch (err: any) {
     console.error("API error:", err);
     return Response.json(
