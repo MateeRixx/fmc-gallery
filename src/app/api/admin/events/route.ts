@@ -3,8 +3,12 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 function getSupabase() {
   try {
     return getSupabaseServer();
-  } catch (err: any) {
-    console.error("Supabase initialization failed:", err.message);
+  } catch (err) {
+    if (err instanceof Error) {
+      console.error("Supabase initialization failed:", err.message);
+    } else {
+      console.error("Supabase initialization failed:", err);
+    }
     throw err;
   }
 }
@@ -37,9 +41,10 @@ export async function GET(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ data });
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Fetch failed";
     console.error("GET /api/admin/events error:", err);
-    return Response.json({ error: err.message || "Fetch failed" }, { status: 500 });
+    return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
 
@@ -70,9 +75,10 @@ export async function POST(request: Request) {
 
     console.log("Successfully inserted event:", data);
     return Response.json({ ok: true, data });
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Insert failed";
     console.error("POST /api/admin/events error:", err);
-    return Response.json({ error: err.message || "Insert failed" }, { status: 500 });
+    return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
 
@@ -98,9 +104,10 @@ export async function PUT(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Update failed";
     console.error("PUT /api/admin/events error:", err);
-    return Response.json({ error: err.message || "Update failed" }, { status: 500 });
+    return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
 
@@ -122,8 +129,9 @@ export async function DELETE(request: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
     return Response.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "Delete failed";
     console.error("DELETE /api/admin/events error:", err);
-    return Response.json({ error: err.message || "Delete failed" }, { status: 500 });
+    return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
