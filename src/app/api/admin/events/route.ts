@@ -1,4 +1,35 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
+import { type NextRequest } from "next/server";
+import { SupabaseClient, User } from "@supabase/supabase-js";
+
+/**
+ * Verifies the user's JWT and checks if they are an admin.
+ * @returns The authenticated user if valid, otherwise a Response object.
+ */
+async function verifyAdmin(supabase: SupabaseClient, request: NextRequest): Promise<User | Response> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return Response.json({ error: 'Missing or invalid Authorization header' }, { status: 401 });
+  }
+  const token = authHeader.split(' ')[1];
+
+  const { data: userData, error: userError } = await supabase.auth.getUser(token);
+  if (userError || !userData?.user) {
+    return Response.json({ error: 'Invalid or expired token' }, { status: 401 });
+  }
+
+  const user = userData.user;
+
+  // IMPORTANT: Add your own admin authorization logic here.
+  // Example: check for a specific email, a role, or a custom claim.
+  const isAdmin = user.email && user.email.endsWith('@yourdomain.com'); // <-- CHANGE THIS
+  if (!isAdmin) {
+    return Response.json({ error: 'Forbidden: insufficient privileges' }, { status: 403 });
+  }
+
+  return user;
+}
+
 
 function getSupabase() {
   try {
@@ -13,7 +44,7 @@ function getSupabase() {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabase();
     const url = new URL(request.url);
@@ -48,9 +79,12 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabase();
+    const adminUser = await verifyAdmin(supabase, request);
+    if (adminUser instanceof Response) return adminUser;
+
     const body = await request.json();
     const { name, slug, description, cover_url, bg_url } = body || {};
     
@@ -82,9 +116,12 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
     const supabase = getSupabase();
+    const adminUser = await verifyAdmin(supabase, request);
+    if (adminUser instanceof Response) return adminUser;
+
     const body = await request.json();
     const { id, name, slug, description, cover_url, bg_url } = body || {};
     if (!id || !Number.isFinite(Number(id))) {
@@ -111,9 +148,12 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
     const supabase = getSupabase();
+    const adminUser = await verifyAdmin(supabase, request);
+    if (adminUser instanceof Response) return adminUser;
+
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     let id = idParam ? Number(idParam) : undefined;
