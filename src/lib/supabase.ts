@@ -1,11 +1,17 @@
-// src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
+// lib/supabaseClient.ts
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  throw new Error('Missing Supabase environment variables')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Fail fast during server start / build if env is missing
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable.');
 }
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+/**
+ * Client-side Supabase instance.
+ * Use this in React components and pages (browser).
+ */
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+export default supabase;
