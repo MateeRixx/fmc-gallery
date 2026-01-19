@@ -22,7 +22,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
         className="cursor-pointer w-[17.6rem] md:w-88] mx-auto my-8 md:my-12 bg-white rounded-3xl overflow-hidden shadow-2xl"
       >
         <div className="relative aspect-4/5">
-          <Image src={event.cover} alt={event.name} fill className="object-cover" />
+          <Image src="https://images.unsplash.com/photo-1726200290596-7e4fc55bb77d?q=80&w=1332&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt={event.name} fill className="object-cover" />
         </div>
         <div className="px-4 py-4 text-center">
           <h3 className="font-ibarra text-xl md:text-2xl font-semibold text-black mb-2 uppercase tracking-wide h-12 overflow-hidden">
