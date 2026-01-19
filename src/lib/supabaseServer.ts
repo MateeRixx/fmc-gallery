@@ -13,7 +13,12 @@ export function getSupabaseServer() {
     throw new Error(`Supabase environment variables are missing: URL=${!!url}, KEY=${!!key}`);
   }
   
-  const client = createClient(url, key);
+  const client = createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
   console.log("✓ Supabase server client initialized with service role key");
   return client;
 }
