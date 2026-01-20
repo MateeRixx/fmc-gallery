@@ -27,7 +27,7 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
        try {
          const { data: ev, error: evError } = await supabase
            .from("events")
-           .select("name, description, bg_url")
+           .select("title, description, starts_at")
            .eq("slug", slug)
            .maybeSingle();
          
@@ -36,16 +36,19 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
          }
          if (!cancelled) setEvent(ev ?? null);
 
-         const { data: ph, error: phError } = await supabase
-           .from("photos")
-           .select("url")
-           .eq("event_slug", slug)
-           .order("id", { ascending: true });
-         
-         if (phError) {
-           console.error("Error fetching photos:", phError);
+         // First get the event ID, then fetch photos
+         if (ev?.id) {
+           const { data: ph, error: phError } = await supabase
+             .from("photos")
+             .select("path")
+             .eq("event_id", ev.id)
+             .order("id", { ascending: true });
+           
+           if (phError) {
+             console.error("Error fetching photos:", phError);
+           }
+           if (!cancelled) setPhotos((ph || []).map(r => sanitize(r.path)));
          }
-         if (!cancelled) setPhotos((ph || []).map(r => sanitize(r.url)));
        } catch (err) {
          console.error("Fetch error:", err);
        }

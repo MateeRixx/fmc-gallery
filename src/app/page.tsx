@@ -56,7 +56,7 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, name, description, cover_url, bg_url')
+          .select('id, slug, title, description, starts_at')
           .order('id', { ascending: true })
         
         if (error) {
@@ -65,10 +65,8 @@ export default function Home() {
         }
         
         setEvents(data || [])
-        if (data && data.length > 0) {
-          const firstBg = sanitize(data[0]?.bg_url) || '/images/hero.jpg'
-          setCurrentBg(firstBg)
-        }
+        // Default to hero image since bg_url column no longer exists in schema
+        setCurrentBg('/images/hero.jpg')
       } catch (err) {
         console.error('Error fetching events:', err)
       }

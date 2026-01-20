@@ -40,7 +40,7 @@ export default function EventsPage() {
       }
       const { data, error } = await supabase
         .from("events")
-        .select("id, slug, name, description, cover_url")
+        .select("id, slug, title, description, starts_at")
         .order("id", { ascending: true });
 
       if (error) {

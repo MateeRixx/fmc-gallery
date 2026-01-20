@@ -121,11 +121,10 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       }
 
       const payload = {
-        name,
+        title: name,
         slug,
         description: desc,
-        ...(coverUrl ? { cover_url: coverUrl } : {}),
-        ...(bgUrl ? { bg_url: bgUrl } : {}),
+        starts_at: new Date().toISOString(),
       };
 
       const eventRes = await fetch("/api/admin/events", {

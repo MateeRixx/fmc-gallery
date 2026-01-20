@@ -52,17 +52,22 @@ export async function POST(request: Request) {
   try {
     const supabase = getSupabase();
     const body = await request.json();
-    const { name, slug, description, cover_url, bg_url } = body || {};
+    const { title, slug, description, starts_at } = body || {};
     
-    console.log("POST /api/admin/events - Received:", { name, slug, description, cover_url: !!cover_url, bg_url: !!bg_url });
+    console.log("POST /api/admin/events - Received:", { title, slug, description, starts_at });
     
-    if (!name || !slug || !description || !cover_url) {
+    if (!title || !slug || !description) {
       console.error("Missing required fields");
-      return Response.json({ error: "Missing fields: name, slug, description, cover_url" }, { status: 400 });
+      return Response.json({ error: "Missing fields: title, slug, description" }, { status: 400 });
     }
 
-    const row: Record<string, unknown> = { name, slug, description, cover_url };
-    if (bg_url) row.bg_url = bg_url;
+    const row: Record<string, unknown> = { 
+      title, 
+      slug, 
+      description, 
+      is_public: true,
+      starts_at: starts_at || new Date().toISOString()
+    };
 
     console.log("Inserting into events table:", row);
     
@@ -70,7 +75,14 @@ export async function POST(request: Request) {
     
     if (error) {
       console.error("Insert error:", error);
-      return Response.json({ error: error.message }, { status: 500 });
+      console.error("Full error object:", JSON.stringify(error, null, 2));
+      console.error("Row being inserted:", row);
+      return Response.json({ 
+        error: error.message,
+        details: JSON.stringify(error),
+        code: error.code,
+        hint: (error as any).hint
+      }, { status: 500 });
     }
 
     console.log("Successfully inserted event:", data);
@@ -86,16 +98,15 @@ export async function PUT(request: Request) {
   try {
     const supabase = getSupabase();
     const body = await request.json();
-    const { id, name, slug, description, cover_url, bg_url } = body || {};
+    const { id, title, slug, description, starts_at } = body || {};
     if (!id || !Number.isFinite(Number(id))) {
       return Response.json({ error: "Invalid id" }, { status: 400 });
     }
     const updates: Record<string, unknown> = {};
-    if (typeof name === "string") updates.name = name.trim();
+    if (typeof title === "string") updates.title = title.trim();
     if (typeof slug === "string") updates.slug = slug.trim().toLowerCase();
     if (typeof description === "string") updates.description = description.trim();
-    if (typeof cover_url === "string") updates.cover_url = cover_url.trim();
-    if (typeof bg_url === "string") updates.bg_url = bg_url.trim();
+    if (typeof starts_at === "string") updates.starts_at = starts_at.trim();
     if (Object.keys(updates).length === 0) {
       return Response.json({ error: "No fields to update" }, { status: 400 });
     }
