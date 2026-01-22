@@ -1,8 +1,8 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
-function getSupabase() {
+async function getSupabase() {
   try {
-    return getSupabaseServer();
+    return await getSupabaseServer();
   } catch (err) {
     if (err instanceof Error) {
       console.error("Supabase initialization failed:", err.message);
@@ -15,7 +15,7 @@ function getSupabase() {
 
 export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     if (idParam) {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       }
       const { data, error } = await supabase
         .from("events")
-        .select("id, name, slug, description, cover_url, bg_url")
+        .select("id, title, slug, description, cover_url, bg_url")
         .eq("id", id)
         .maybeSingle();
       if (error) {
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     }
     const { data, error } = await supabase
       .from("events")
-      .select("id, name")
+      .select("id, title")
       .order("id", { ascending: true });
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const body = await request.json();
     const { title, slug, description, starts_at } = body || {};
     
@@ -61,15 +61,23 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing fields: title, slug, description" }, { status: 400 });
     }
 
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return Response.json({ error: "Unauthorized: must be logged in" }, { status: 401 });
+    }
+
     const row: Record<string, unknown> = { 
       title, 
       slug, 
       description, 
       is_public: true,
-      starts_at: starts_at || new Date().toISOString()
+      starts_at: starts_at || new Date().toISOString(),
+      user_id: user.id  // Set user_id from authenticated user
     };
 
-    console.log("Inserting into events table:", row);
+    console.log("Inserting into events table:", { ...row, user_id: user.id });
     
     const { data, error } = await supabase.from("events").insert(row).select();
     
@@ -96,7 +104,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const body = await request.json();
     const { id, title, slug, description, starts_at } = body || {};
     if (!id || !Number.isFinite(Number(id))) {
@@ -124,7 +132,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     let id = idParam ? Number(idParam) : undefined;

@@ -26,7 +26,7 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         const j = await loadRes.json();
         const ev = j?.data;
         if (ev) {
-          setName(ev.name || "");
+          setName(ev.title || "");
           setSlug((ev.slug || "").toLowerCase());
           setDesc(ev.description || "");
           setExistingCover(ev.cover_url || null);
@@ -50,6 +50,13 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
     }
 
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setStatus("❌ You must be logged in to add events");
+        return;
+      }
+
       const slugRes = await fetch("/api/admin/events/check-slug", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

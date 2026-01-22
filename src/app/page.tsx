@@ -137,7 +137,7 @@ export default function Home() {
             >
               {events.map((ev) => (
                 <SwiperSlide key={ev.id}>
-                <EventCardBasic event={{ slug: ev.slug, name: ev.name, desc: ev.description, cover: ((ev.cover_url || '').trim().replace(/\)+$/, '')) }} />
+                <EventCardBasic event={{ slug: ev.slug, title: ev.name || '', description: ev.description || '' }} />
               </SwiperSlide>
               ))}
             </Swiper>

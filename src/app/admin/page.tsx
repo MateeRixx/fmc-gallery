@@ -2,11 +2,10 @@ export const revalidate = 0;
 export const runtime = "nodejs";
 
 import AdminContent from "./AdminContent";
-import { getSupabaseServer } from "@/app/events/lib/supabaseServer";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export default async function AdminPage() {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const { data } = await supabase
     .from("events")
     .select("id, name")

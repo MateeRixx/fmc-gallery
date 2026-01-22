@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     let supabase;
     try {
-      supabase = getSupabaseServer();
+      supabase = await getSupabaseServer();
     } catch (err: any) {
       console.error("Supabase initialization error:", err.message);
       return Response.json(

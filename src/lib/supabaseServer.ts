@@ -1,24 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-export function getSupabaseServer() {
+export async function getSupabaseServer() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  console.log("getSupabaseServer called with:");
-  console.log("  URL exists:", !!url);
-  console.log("  Service role key exists:", !!key);
-  console.log("  Key starts with 'eyJ':", key?.startsWith("eyJ"));
-  
-  if (!url || !key) {
-    throw new Error(`Supabase environment variables are missing: URL=${!!url}, KEY=${!!key}`);
+  if (!url || !anonKey) {
+    throw new Error(`Supabase environment variables are missing: URL=${!!url}, ANON_KEY=${!!anonKey}`);
   }
   
-  const client = createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+  const cookieStore = await cookies();
+  
+  const client = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => cookieStore.getAll(),
+      setAll: (cookies) => cookies.forEach(c => cookieStore.set(c.name, c.value))
+    }
   });
-  console.log("✓ Supabase server client initialized with service role key");
+  
   return client;
 }
