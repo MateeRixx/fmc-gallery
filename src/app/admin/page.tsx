@@ -8,7 +8,7 @@ export default async function AdminPage() {
   const supabase = await getSupabaseServer();
   const { data } = await supabase
     .from("events")
-    .select("id, name")
+    .select("id, title, slug")
     .order("id", { ascending: true });
   const events = data || [];
   return <AdminContent events={events} />;

@@ -2,6 +2,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRef, useState, useEffect } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { Swiper, SwiperSlide } from 'swiper/react'
@@ -56,7 +57,7 @@ export default function Home() {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('id, slug, title, description, starts_at')
+          .select('id, slug, title, description, starts_at, cover_url')
           .order('id', { ascending: true })
         
         if (error) {
@@ -64,7 +65,18 @@ export default function Home() {
           return
         }
         
-        setEvents(data || [])
+        const mappedEvents = (data || []).map((ev: any) => {
+          const cover = sanitize(ev.cover_url);
+          return {
+            id: ev.id,
+            slug: ev.slug,
+            name: ev.title,
+            description: ev.description,
+            cover_url: cover,
+            bg_url: cover || null
+          }
+        })
+        setEvents(mappedEvents)
         // Default to hero image since bg_url column no longer exists in schema
         setCurrentBg('/images/hero.jpg')
       } catch (err) {
@@ -121,6 +133,13 @@ export default function Home() {
       <section id="events" ref={eventsRef} className="relative py-32">
         <div className="max-w-7xl mx-auto px-8">
           <h2 className="text-center text-8xl md:text-9xl font-black text-white mb-20">Our Events</h2>
+          <Link
+            href="/admin"
+            className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-40 inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/10 border border-white/25 text-white font-semibold backdrop-blur shadow-lg hover:bg-white/20 hover:-translate-y-0.5 hover:shadow-xl transition"
+          >
+            <span className="text-lg">＋</span>
+            <span>Add Event</span>
+          </Link>
           <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
             <Swiper
               modules={[Navigation]}
@@ -137,17 +156,29 @@ export default function Home() {
             >
               {events.map((ev) => (
                 <SwiperSlide key={ev.id}>
-                <EventCardBasic event={{ slug: ev.slug, title: ev.name || '', description: ev.description || '' }} />
+                <EventCardBasic event={{ slug: ev.slug, title: ev.name || '', description: ev.description || '', cover_url: ev.cover_url }} />
               </SwiperSlide>
               ))}
             </Swiper>
           </div>
 
-          <button className="prev fixed left-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
-            <span className="text-4xl text-white">←</span>
+          <button className="prev fixed left-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/20 transition">
+            <svg
+              viewBox="0 0 128 128"
+              aria-hidden="true"
+              className="w-8 h-8 fill-white/90"
+            >
+              <path d="M64 .3C28.7.3 0 28.8 0 64s28.7 63.7 64 63.7 64-28.5 64-63.7S99.3.3 64 .3zm0 121C32.2 121.3 6.4 95.7 6.4 64 6.4 32.3 32.2 6.7 64 6.7s57.6 25.7 57.6 57.3c0 31.7-25.8 57.3-57.6 57.3zm1.3-82.8L41.6 64l23.6 25.5h13.5L54.4 64l24.4-25.5H65.3z" />
+            </svg>
           </button>
-          <button className="next fixed right-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition">
-            <span className="text-4xl text-white">→</span>
+          <button className="next fixed right-4 top-1/2 -translate-y-1/2 z-50 w-14 h-14 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/20 transition">
+            <svg
+              viewBox="0 0 128 128"
+              aria-hidden="true"
+              className="w-8 h-8 fill-white/90"
+            >
+              <path d="M64 0C28.7 0 0 28.7 0 64s28.7 64 64 64 64-28.7 64-64S99.3 0 64 0zm0 121.6C32.2 121.6 6.4 95.8 6.4 64S32.2 6.4 64 6.4s57.6 25.8 57.6 57.6-25.8 57.6-57.6 57.6zM49.2 38.4 73.6 64 49.2 89.6h13.5L86.4 64 62.7 38.4H49.2z" />
+            </svg>
           </button>
         </div>
       </section>

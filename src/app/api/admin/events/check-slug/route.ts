@@ -1,4 +1,4 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     let supabase;
     try {
-      supabase = await getSupabaseServer();
+      supabase = getSupabaseAdmin();
     } catch (err: any) {
       console.error("Supabase initialization error:", err.message);
       return Response.json(

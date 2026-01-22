@@ -17,7 +17,7 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
   const { slug } = React.use(params);
   const sp = React.use(searchParams);
   const testMode = sp?.test === "1";
-  const [event, setEvent] = useState<{ name: string; description: string; bg_url?: string | null } | null>(null);
+  const [event, setEvent] = useState<{ name: string; description: string; hero_image_url?: string | null } | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const sanitize = (u?: string | null) => (u || "").trim().replace(/\)+$/, "");
  
@@ -27,14 +27,14 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
        try {
          const { data: ev, error: evError } = await supabase
            .from("events")
-           .select("title, description, starts_at")
+           .select("id, title, description, hero_image_url")
            .eq("slug", slug)
            .maybeSingle();
          
          if (evError) {
            console.error("Error fetching event:", evError);
          }
-         if (!cancelled) setEvent(ev ?? null);
+         if (!cancelled) setEvent(ev ? { name: ev.title, description: ev.description, hero_image_url: ev.hero_image_url } : null);
 
          // First get the event ID, then fetch photos
          if (ev?.id) {
@@ -63,7 +63,7 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
      ? {
          name: event.name,
          description: event.description,
-         bgImage: sanitize(event.bg_url) || "/images/hero.jpg",
+         bgImage: sanitize(event.hero_image_url) || "/images/hero.jpg",
          images: photos,
        }
      : undefined;

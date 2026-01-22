@@ -8,13 +8,25 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { event_slug, urls } = body || {};
-    if (!event_slug || !urls || !Array.isArray(urls) || urls.length === 0) {
-      return Response.json({ error: "Missing fields" }, { status: 400 });
+    const { event_id, event_slug, urls } = body || {};
+    
+    let id = event_id;
+    if (!id && event_slug) {
+      const { data: ev } = await supabase
+        .from("events")
+        .select("id")
+        .eq("slug", event_slug)
+        .maybeSingle();
+      id = ev?.id;
     }
+    
+    if (!id || !urls || !Array.isArray(urls) || urls.length === 0) {
+      return Response.json({ error: "Missing event_id/slug or urls" }, { status: 400 });
+    }
+    
     const rows = urls.map((url: string) => ({
-      event_slug,
-      url: (url || "").trim(),
+      event_id: id,
+      path: (url || "").trim(),
     }));
     const { error } = await supabase.from("photos").insert(rows);
     if (error) {

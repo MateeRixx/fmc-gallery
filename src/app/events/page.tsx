@@ -19,7 +19,7 @@ const supabase = createClient(
 type Event = {
   id: number;
   slug: string;
-  name: string;
+  title: string;
   description: string;
   cover_url: string;
 };
@@ -40,7 +40,7 @@ export default function EventsPage() {
       }
       const { data, error } = await supabase
         .from("events")
-        .select("id, slug, title, description, starts_at")
+        .select("id, slug, title, description, cover_url, starts_at")
         .order("id", { ascending: true });
 
       if (error) {
@@ -124,7 +124,7 @@ export default function EventsPage() {
                   event={{
                     id: event.id,
                     slug: event.slug,
-                    name: event.name,
+                    name: event.title,
                     description: event.description,
                     coverImage: sanitize(event.cover_url),
                   }}

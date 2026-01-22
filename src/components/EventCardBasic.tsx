@@ -8,10 +8,14 @@ type EventBasic = {
   slug: string;
   title: string;
   description: string;
+  cover_url?: string | null;
   starts_at?: string;
 };
 
+const FALLBACK_IMG = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80";
+
 export default function EventCardBasic({ event }: { event: EventBasic }) {
+  const cover = (event.cover_url || "").trim() || FALLBACK_IMG;
   return (
     <Link href={`/events/${event.slug}`} className="group block">
       <motion.div
@@ -23,7 +27,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
       >
         <div className="relative aspect-4/5">
           <Image
-            src="https://images.unsplash.com/photo-1726200290596-7e4fc55bb77d?q=80&w=1332&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHxfA%3D%3D"
+            src={cover}
             alt={event?.title || "Event image"}
             fill
             className="object-cover"
@@ -33,7 +37,10 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
           <h3 className="font-ibarra text-xl md:text-2xl font-semibold text-black mb-2 uppercase tracking-wide h-12 overflow-hidden">
             {event.title}
           </h3>
-          <p className="font-inter text-sm md:text-base text-gray-700 leading-relaxed h-16 overflow-hidden">
+          <p
+            className="font-inter text-sm md:text-base text-gray-700 leading-relaxed overflow-hidden min-h-17"
+            style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}
+          >
             {event.description}
           </p>
         </div>

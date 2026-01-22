@@ -3,11 +3,22 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { event_slug, url } = body;
+    const { event_id, event_slug, url } = body;
 
-    if (!event_slug || !url) {
+    let id = event_id;
+    if (!id && event_slug) {
+      const sb = await getSupabaseServer();
+      const { data: ev } = await sb
+        .from("events")
+        .select("id")
+        .eq("slug", event_slug)
+        .maybeSingle();
+      id = ev?.id;
+    }
+
+    if (!id || !url) {
       return Response.json(
-        { error: "Missing event_slug or url" },
+        { error: "Missing event_id/slug or url" },
         { status: 400 }
       );
     }
@@ -25,7 +36,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from("photos")
-      .insert({ event_slug, url })
+      .insert({ event_id: id, path: url })
       .select();
 
     if (error) {

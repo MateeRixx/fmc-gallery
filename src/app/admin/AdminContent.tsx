@@ -3,10 +3,12 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminForm from "@/components/AdminForm";
 
-export default function AdminContent({ events: initial }: { events: { id: number; name: string }[] }) {
+type AdminEvent = { id: number | string; title?: string; name?: string; slug?: string };
+
+export default function AdminContent({ events: initial }: { events: AdminEvent[] }) {
   const router = useRouter();
-  const [events, setEvents] = useState<{ id: number; name: string }[]>(initial);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [events, setEvents] = useState<AdminEvent[]>(initial);
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   useEffect(() => {
     try {
       const raw = localStorage.getItem("fmc-admin");
@@ -40,9 +42,9 @@ export default function AdminContent({ events: initial }: { events: { id: number
       setEvents([]);
     }
   }
-  async function deleteEvent(id: number) {
+  async function deleteEvent(id: number | string) {
     try {
-      await fetch(`/api/admin/events?id=${id}`, { method: "DELETE" });
+      await fetch(`/api/admin/events?id=${encodeURIComponent(String(id))}`, { method: "DELETE" });
       fetchEvents();
     } catch {}
   }
@@ -59,13 +61,13 @@ export default function AdminContent({ events: initial }: { events: { id: number
               localStorage.removeItem("fmc-admin");
               window.location.href = "/";
             }}
-            className="px-8 py-4 bg-red-600 text-white rounded-full hover:bg-red-700 transition font-bold"
+            className="px-8 py-4 bg-red-600 text-white rounded-full transition font-bold shadow-lg shadow-red-500/30 hover:bg-red-500 hover:-translate-y-0.5 hover:shadow-red-500/50 active:translate-y-0 active:shadow-red-500/30"
           >
             Logout
           </button>
           <button
             onClick={() => window.location.href = "/"}
-            className="px-8 py-4 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition font-bold"
+            className="px-8 py-4 bg-purple-600 text-white rounded-full transition font-bold shadow-lg shadow-purple-500/30 hover:bg-purple-500 hover:-translate-y-0.5 hover:shadow-purple-500/50 active:translate-y-0 active:shadow-purple-500/30"
           >
             Back to Home
           </button>
@@ -74,11 +76,17 @@ export default function AdminContent({ events: initial }: { events: { id: number
           <h2 className="text-3xl font-bold mb-6">Existing Events</h2>
           {events.map((ev) => (
             <div key={ev.id} className="flex items-center gap-4 mb-4">
-              <span className="text-xl">{ev.name}</span>
-              <button onClick={() => setEditingId(ev.id)} className="px-4 py-2 bg-blue-600 rounded">
+              <span className="text-xl">{ev.title || ev.name || "(untitled)"}</span>
+              <button
+                onClick={() => setEditingId(ev.id)}
+                className="px-4 py-2 bg-blue-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-blue-500 shadow-md hover:shadow-blue-500/40 focus:shadow-blue-500/60 focus:outline-none"
+              >
                 Edit
               </button>
-              <button onClick={() => deleteEvent(ev.id)} className="px-4 py-2 bg-red-600 rounded">
+              <button
+                onClick={() => deleteEvent(ev.id)}
+                className="px-4 py-2 bg-red-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-red-500 shadow-md hover:shadow-red-500/40 focus:shadow-red-500/60 focus:outline-none"
+              >
                 Delete
               </button>
             </div>
