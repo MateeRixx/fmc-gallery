@@ -1,15 +1,66 @@
-# FMC Gallery
-Digital media gallery for Film & Media Club built with Next.js (App Router), Supabase auth/storage, and Tailwind.
+Got it — here’s a **clean, concise README version** with the **Vercel live link added**, keeping it professional and GitHub-ready 👌
 
-## Quick start
-1) Install dependencies: `npm install`
-2) Copy `.env.example` (if present) or create `.env.local` with:
-	- `NEXT_PUBLIC_SUPABASE_URL=`
-	- `NEXT_PUBLIC_SUPABASE_ANON_KEY=`
-	- `SUPABASE_SERVICE_ROLE_KEY=` (server-only; used for admin APIs)
-3) Run the dev server: `npm run dev` then open http://localhost:3000
+---
 
-## Notes
-- Remote images are allowed from `images.unsplash.com` and any `*.supabase.co` bucket (see `next.config.js`).
-- Admin routes use the service-role key on the server; never expose it to the client or commit it.
-- Incremental TypeScript builds may generate `tsconfig.tsbuildinfo`; you can ignore or delete it locally.
+# 🎬 FMC Gallery App
+
+A modern, responsive event gallery for the **Film & Media Club (FMC), RGIPT**. Built to showcase club events through elegant photo galleries with smooth animations and a premium dark aesthetic.
+
+🔗 **Live Demo:** [https://fmc-gallery.vercel.app/](https://fmc-gallery.vercel.app/)
+
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
+![Supabase](https://img.shields.io/badge/Supabase-Latest-green?logo=supabase)
+![Tailwind](https://img.shields.io/badge/TailwindCSS-4-38B2AC?logo=tailwind-css)
+
+---
+
+## ✨ Key Features
+
+### 🖼️ Gallery
+
+* Event-based photo galleries with custom slugs
+* Masonry-style responsive layout
+* Bulk image upload with auto compression
+* Multi-image ZIP download
+
+### 🎨 UI / UX
+
+* Smooth animations using Framer Motion
+* Swiper-based event carousel
+* Fully responsive (mobile-first)
+* Dark black–gold theme
+
+### 🔐 Admin
+
+* Secure authentication
+* Create, edit & delete events
+* Upload and manage photos
+* Real-time gallery updates
+
+---
+
+## 🛠️ Tech Stack
+
+* **Framework:** Next.js (App Router)
+* **Language:** TypeScript
+* **Database & Storage:** Supabase
+* **Styling:** Tailwind CSS
+* **Animations:** Framer Motion
+* **Carousel:** Swiper.js
+* **Image Tools:** browser-image-compression, JSZip
+
+---
+
+## 🚀 Setup
+
+```bash
+git clone https://github.com/MateeRixx/fmc-gallery.git
+cd fmc-gallery
+npm install
+npm run dev
+```
+
+> Requires **Node.js 18+** and a **Supabase project**.
+
+
