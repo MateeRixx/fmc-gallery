@@ -3,7 +3,6 @@ import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import AddPhotoButton from "@/components/AddPhotoButton";
 import { useEffect, useState } from "react";
-import JSZip from "jszip";
 
 export type EventData = {
   name: string;
@@ -21,6 +20,9 @@ function GalleryImage({ src, alt }: { src: string; alt: string }) {
       alt={alt}
       width={800}
       height={600}
+      loading="lazy"
+      quality={80}
+      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setVisible(false)}
       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
     />
@@ -60,6 +62,7 @@ export default function EventGalleryClient({ slug, event, testMode }: { slug: st
 
     setIsDownloading(true);
     try {
+      const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       const folder = zip.folder(event.name || "event-gallery");
 
@@ -102,7 +105,15 @@ export default function EventGalleryClient({ slug, event, testMode }: { slug: st
       <Navbar />
       <AddPhotoButton eventSlug={slug} />
       <section className="relative min-h-screen flex items-center justify-center text-center px-6">
-        <Image src={event.bgImage} alt={event.name} fill priority className="object-cover brightness-50" />
+        <Image 
+          src={event.bgImage} 
+          alt={event.name} 
+          fill 
+          priority 
+          quality={75}
+          sizes="100vw"
+          className="object-cover brightness-50" 
+        />
         <div className="absolute inset-0 bg-black/60" />
         <div className="relative z-10 max-w-5xl">
           <h1 className="text-6xl md:text-9xl font-black text-white drop-shadow-2xl mb-8">{event.name}</h1>

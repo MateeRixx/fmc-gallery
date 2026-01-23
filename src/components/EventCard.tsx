@@ -33,6 +33,8 @@ export default function EventCard({ event, isActive = false }: Props) {
           src={cover}
           alt={event.name}
           fill
+          sizes="(max-width: 640px) 100vw, 28rem"
+          quality={80}
           className="object-cover brightness-50 group-hover:brightness-75 transition"
         />
 

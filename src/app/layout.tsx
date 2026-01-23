@@ -2,13 +2,6 @@
 import type { Metadata } from "next";
 import './globals.css'
 
-// Fonts loaded via <link> to avoid Turbopack internal font resolution issues
-
-// Optional: Keep Geist if you want it as fallback, otherwise remove
-// import { Geist, Geist_Mono } from "next/font/google";
-// const geistSans = Geist({ ... });
-// const geistMono = Geist_Mono({ ... });
-
 export const metadata: Metadata = {
   title: "Film & Media Club • RGIPT",
   description: "Official website of FMC RGIPT",

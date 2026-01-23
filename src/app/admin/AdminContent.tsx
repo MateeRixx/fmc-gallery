@@ -1,7 +1,12 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import AdminForm from "@/components/AdminForm";
+import dynamic from "next/dynamic";
+
+const AdminForm = dynamic(() => import("@/components/AdminForm"), {
+  loading: () => <div className="text-center text-gray-400">Loading form...</div>,
+  ssr: false
+});
 
 type AdminEvent = { id: number | string; title?: string; name?: string; slug?: string };
 
@@ -54,7 +59,9 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
         <h1 className="text-7xl font-black mb-8 text-white">
           ADMIN PANEL
         </h1>
-        <AdminForm editingId={editingId} onSuccess={fetchEvents} />
+        <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading admin panel...</div>}>
+          <AdminForm editingId={editingId} onSuccess={fetchEvents} />
+        </Suspense>
         <div className="mt-8 flex gap-4 justify-center">
           <button
             onClick={() => {

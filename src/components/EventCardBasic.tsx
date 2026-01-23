@@ -30,6 +30,8 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
             src={cover}
             alt={event?.title || "Event image"}
             fill
+            sizes="(max-width: 768px) 17.6rem, 22rem"
+            quality={80}
             className="object-cover"
           />
         </div>
