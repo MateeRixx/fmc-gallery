@@ -2,13 +2,14 @@
 import React, { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { Event } from "@/types";
 
 const AdminForm = dynamic(() => import("@/components/AdminForm"), {
   loading: () => <div className="text-center text-gray-400">Loading form...</div>,
   ssr: false
 });
 
-type AdminEvent = { id: number | string; title?: string; name?: string; slug?: string };
+type AdminEvent = Pick<Event, 'id' | 'title' | 'slug'>;
 
 export default function AdminContent({ events: initial }: { events: AdminEvent[] }) {
   const router = useRouter();
@@ -83,7 +84,7 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
           <h2 className="text-3xl font-bold mb-6">Existing Events</h2>
           {events.map((ev) => (
             <div key={ev.id} className="flex items-center gap-4 mb-4">
-              <span className="text-xl">{ev.title || ev.name || "(untitled)"}</span>
+              <span className="text-xl">{ev.title || "(untitled)"}</span>
               <button
                 onClick={() => setEditingId(ev.id)}
                 className="px-4 py-2 bg-blue-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-blue-500 shadow-md hover:shadow-blue-500/40 focus:shadow-blue-500/60 focus:outline-none"

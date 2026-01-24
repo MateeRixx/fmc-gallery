@@ -1,23 +1,16 @@
 "use client";
  
 import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import ClientGallery from "./ClientGallery";
+import {supabase} from "@/lib/supabase";
+import { Event } from "@/types";
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  throw new Error('Missing Supabase environment variables')
-}
- 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
  
 export default function Page({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ test?: string }> }) {
   const { slug } = React.use(params);
   const sp = React.use(searchParams);
   const testMode = sp?.test === "1";
-  const [event, setEvent] = useState<{ name: string; description: string; hero_image_url?: string | null } | null>(null);
+  const [event, setEvent] = useState<Omit<Event, 'id' | 'slug'> | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const sanitize = (u?: string | null) => (u || "").trim().replace(/\)+$/, "");
  
@@ -34,7 +27,7 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
          if (evError) {
            console.error("Error fetching event:", evError);
          }
-         if (!cancelled) setEvent(ev ? { name: ev.title, description: ev.description, hero_image_url: ev.hero_image_url } : null);
+         if (!cancelled) setEvent(ev ? { title: ev.title, description: ev.description, cover_url: ev.hero_image_url } : null);
 
          // First get the event ID, then fetch photos
          if (ev?.id) {
@@ -61,9 +54,9 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
  
    const baseEvent = event
      ? {
-         name: event.name,
+         name: event.title,
          description: event.description,
-         bgImage: sanitize(event.hero_image_url) || "/images/hero.jpg",
+         bgImage: sanitize(event.cover_url) || "/images/hero.jpg",
          images: photos,
        }
      : undefined;

@@ -6,18 +6,10 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import EventCardBasic from '@/components/EventCardBasic';
 import Link from 'next/link';
-
-interface Event {
-  id: number;
-  slug: string;
-  name: string;
-  description: string;
-  cover_url: string;
-  bg_url?: string | null;
-}
+import { Event as GalleryEvent } from '@/types';
 
 interface Props {
-  events: Event[];
+  events: GalleryEvent[];
   cardsRef: React.RefObject<HTMLDivElement>;
   onSlideChange: (bgUrl: string) => void;
 }
@@ -35,13 +27,14 @@ export default function EventCarousel({ events, cardsRef, onSlideChange }: Props
         navigation={{ prevEl: '.prev', nextEl: '.next' }}
         className="h-auto overflow-visible"
         onSlideChange={(s) => {
-          const bg = sanitize(events[s.activeIndex]?.bg_url) || '/images/hero.jpg';
+          const ev = events[s.activeIndex];
+          const bg = sanitize(ev?.hero_image_url || ev?.cover_url) || '/images/hero.jpg';
           onSlideChange(bg);
         }}
       >
         {events.map((ev) => (
           <SwiperSlide key={ev.id}>
-            <EventCardBasic event={{ slug: ev.slug, title: ev.name || '', description: ev.description || '', cover_url: ev.cover_url }} />
+            <EventCardBasic event={{ slug: ev.slug, title: ev.title || '', description: ev.description || '', cover_url: ev.cover_url }} />
           </SwiperSlide>
         ))}
       </Swiper>

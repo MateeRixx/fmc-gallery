@@ -10,19 +10,9 @@ import "swiper/css/pagination";
 
 import Navbar from "@/components/Navbar";
 import EventCard from "@/components/EventCard";
-import { createClient } from "@supabase/supabase-js";
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import {supabase} from "@/lib/supabase";
+import { Event } from "@/types";
 
-type Event = {
-  id: number;
-  slug: string;
-  title: string;
-  description: string;
-  cover_url: string;
-};
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
