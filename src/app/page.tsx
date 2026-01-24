@@ -91,9 +91,11 @@ export default function Home() {
           alt="Hero"
           fill
           priority
-          quality={75}
+          quality={70}
           sizes="100vw"
           className="object-cover"
+          placeholder="blur"
+          blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'%3E%3Crect fill='%23111'/%3E%3C/svg%3E"
         />
       </div>
 

@@ -32,9 +32,9 @@ export default function EventCarousel({ events, cardsRef, onSlideChange }: Props
           onSlideChange(bg);
         }}
       >
-        {events.map((ev) => (
+        {events.map((ev, index) => (
           <SwiperSlide key={ev.id}>
-            <EventCardBasic event={{ slug: ev.slug, title: ev.title || '', description: ev.description || '', cover_url: ev.cover_url }} />
+            <EventCardBasic event={{ slug: ev.slug, title: ev.title || '', description: ev.description || '', cover_url: ev.cover_url, delay: index * 0.15 }} />
           </SwiperSlide>
         ))}
       </Swiper>
