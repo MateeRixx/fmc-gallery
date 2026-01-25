@@ -72,9 +72,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
       setStatus(`✓ Added ${files.length} photo(s) to gallery`);
       setFiles([]);
       setTimeout(() => window.location.reload(), 1200);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Upload failed", err);
-      setStatus(`✗ Error: ${err?.message || err}`);
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as Record<string, unknown>).message)
+          : String(err ?? "Unknown error");
+      setStatus(`✗ Error: ${message}`);
     } finally {
       setBusy(false);
     }

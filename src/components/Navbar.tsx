@@ -25,8 +25,11 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
           typeof parsed?.expiry === "number" &&
           parsed.expiry > Date.now();
         if (valid && parsed.email) {
-          setIsAdmin(true);
-          setAdminEmail(parsed.email);
+          // Defer state updates to avoid synchronous setState inside effect
+          setTimeout(() => {
+            setIsAdmin(true);
+            setAdminEmail(parsed.email as string);
+          }, 0);
         }
       }
     } catch {

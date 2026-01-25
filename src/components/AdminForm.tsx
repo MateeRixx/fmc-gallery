@@ -145,14 +145,13 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       // Reset form
       setName(""); setSlug(""); setDesc(""); setCover(null); setHeroImage(null);
       setExistingCover(null); setExistingHeroImage(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Admin form submit failed", err);
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : err?.message || JSON.stringify(err ?? "Unknown error");
+      let message = "Unknown error";
+      if (err instanceof Error) message = err.message;
+      else if (typeof err === "string") message = err;
+      else if (err && typeof err === "object" && "message" in err)
+        message = String((err as Record<string, unknown>).message);
       setStatus(`Error: ${message}`);
     }
   };

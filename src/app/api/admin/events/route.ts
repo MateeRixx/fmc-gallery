@@ -112,12 +112,28 @@ export async function POST(request: Request) {
       console.error("Insert error:", error);
       console.error("Full error object:", JSON.stringify(error, null, 2));
       console.error("Row being inserted:", row);
-      return Response.json({ 
-        error: error.message,
-        details: JSON.stringify(error),
-        code: error.code,
-        hint: (error as any).hint
-      }, { status: 500 });
+      const errObj = error as unknown;
+      const code =
+        errObj && typeof errObj === "object" && "code" in errObj
+          ? (errObj as Record<string, unknown>).code
+          : undefined;
+      const hint =
+        errObj && typeof errObj === "object" && "hint" in errObj
+          ? (errObj as Record<string, unknown>).hint
+          : undefined;
+      const message =
+        errObj && typeof errObj === "object" && "message" in errObj
+          ? String((errObj as Record<string, unknown>).message)
+          : String(error);
+      return Response.json(
+        {
+          error: message,
+          details: JSON.stringify(error),
+          code,
+          hint,
+        },
+        { status: 500 }
+      );
     }
 
     console.log("Successfully inserted event:", data);
@@ -167,8 +183,12 @@ export async function DELETE(request: Request) {
     const idParam = url.searchParams.get("id");
     let id: string | number | null = idParam ? normalizeId(idParam) : null;
     if (!id) {
-      const body = await request.json().catch(() => null);
-      id = body ? normalizeId((body as any).id) : null;
+      const body: unknown = await request.json().catch(() => null);
+      if (body && typeof body === "object" && "id" in body) {
+        id = normalizeId((body as Record<string, unknown>).id);
+      } else {
+        id = null;
+      }
     }
     if (!id) {
       return Response.json({ error: "Invalid id" }, { status: 400 });

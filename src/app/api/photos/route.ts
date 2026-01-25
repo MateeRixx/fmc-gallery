@@ -26,8 +26,8 @@ export async function POST(request: Request) {
     let supabase;
     try {
       supabase = await getSupabaseServer();
-    } catch (err: any) {
-      console.error("Supabase initialization error:", err.message);
+    } catch (err: unknown) {
+      console.error("Supabase initialization error:", err);
       return Response.json(
         { error: "Service unavailable" },
         { status: 503 }
@@ -48,10 +48,12 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ success: true, data });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("API error:", err);
+    const message =
+      err instanceof Error ? err.message : String(err ?? "Internal server error");
     return Response.json(
-      { error: err.message || "Internal server error" },
+      { error: message },
       { status: 500 }
     );
   }
