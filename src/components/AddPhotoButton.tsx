@@ -16,7 +16,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dir", `${eventSlug}/photos`);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const res = await fetch("/api/upload", { 
+      method: "POST", 
+      headers: {
+        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+      },
+      body: fd 
+    });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       throw new Error(j.error || `Upload failed (${res.status})`);
@@ -29,7 +35,10 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   async function saveBatch(urls: string[], eventSlug: string) {
     const res = await fetch("/api/admin/photos", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+      },
       body: JSON.stringify({ event_slug: eventSlug, urls }),
     });
     const j = await res.json().catch(() => ({}));

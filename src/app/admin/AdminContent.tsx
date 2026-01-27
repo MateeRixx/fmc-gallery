@@ -35,7 +35,12 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
   }, [router]);
   async function fetchEvents() {
     try {
-      const res = await fetch("/api/admin/events", { method: "GET" });
+      const res = await fetch("/api/admin/events", { 
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        }
+      });
       if (!res.ok) {
         console.error(`API error: ${res.status}`, res);
         setEvents([]);
@@ -50,7 +55,12 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
   }
   async function deleteEvent(id: number | string) {
     try {
-      await fetch(`/api/admin/events?id=${encodeURIComponent(String(id))}`, { method: "DELETE" });
+      await fetch(`/api/admin/events?id=${encodeURIComponent(String(id))}`, { 
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        }
+      });
       fetchEvents();
     } catch {}
   }

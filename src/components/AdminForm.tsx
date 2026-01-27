@@ -50,7 +50,10 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
     try {
       const slugRes = await fetch("/api/admin/events/check-slug", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}` 
+        },
         body: JSON.stringify({ slug, excludeId: currentId }),
       });
       
@@ -85,7 +88,13 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         const fd = new FormData();
         fd.append("file", file);
         fd.append("dir", dir);
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const res = await fetch("/api/upload", { 
+          method: "POST", 
+          headers: {
+            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+          },
+          body: fd 
+        });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `Upload failed (${res.status})`);
@@ -126,7 +135,10 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
 
       const eventRes = await fetch("/api/admin/events", {
         method: currentId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        },
         body: JSON.stringify(currentId ? { id: currentId, ...payload } : payload),
       });
 
@@ -137,7 +149,12 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       }
 
       setStatus(currentId ? "SUCCESS! Event updated" : "SUCCESS! Event added — refresh homepage");
-      await fetch("/api/revalidate?path=/", { method: "POST" });
+      await fetch("/api/revalidate?path=/", { 
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        }
+      });
       if (onSuccess) onSuccess();
 
       // Reset form

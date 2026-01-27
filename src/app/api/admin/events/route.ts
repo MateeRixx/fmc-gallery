@@ -1,6 +1,22 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+function authorize(request: Request): Response | null {
+  const expected = process.env.ADMIN_API_TOKEN;
+  if (!expected) {
+    return Response.json(
+      { error: "Service misconfigured: ADMIN_API_TOKEN missing" },
+      { status: 500 }
+    );
+  }
+  const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
+  const token = header?.replace(/^Bearer\s+/i, "").trim();
+  if (!token || token !== expected) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
+
 function normalizeId(raw: unknown): string | number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
@@ -40,6 +56,8 @@ function getSupabaseWrite() {
 }
 
 export async function GET(request: Request) {
+  const authError = authorize(request);
+  if (authError) return authError;
   try {
     const supabase = await getSupabase();
     const url = new URL(request.url);
@@ -75,6 +93,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const authError = authorize(request);
+  if (authError) return authError;
   try {
     const supabase = getSupabaseWrite();
     const body = await request.json();
@@ -107,33 +127,11 @@ export async function POST(request: Request) {
     console.log("Inserting into events table:", row);
     
     const { data, error } = await supabase.from("events").insert(row).select();
-    
+
     if (error) {
       console.error("Insert error:", error);
-      console.error("Full error object:", JSON.stringify(error, null, 2));
       console.error("Row being inserted:", row);
-      const errObj = error as unknown;
-      const code =
-        errObj && typeof errObj === "object" && "code" in errObj
-          ? (errObj as Record<string, unknown>).code
-          : undefined;
-      const hint =
-        errObj && typeof errObj === "object" && "hint" in errObj
-          ? (errObj as Record<string, unknown>).hint
-          : undefined;
-      const message =
-        errObj && typeof errObj === "object" && "message" in errObj
-          ? String((errObj as Record<string, unknown>).message)
-          : String(error);
-      return Response.json(
-        {
-          error: message,
-          details: JSON.stringify(error),
-          code,
-          hint,
-        },
-        { status: 500 }
-      );
+      return Response.json({ error: "Failed to create event" }, { status: 500 });
     }
 
     console.log("Successfully inserted event:", data);
@@ -146,6 +144,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const authError = authorize(request);
+  if (authError) return authError;
   try {
     const supabase = getSupabaseWrite();
     const body = await request.json();
@@ -177,6 +177,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const authError = authorize(request);
+  if (authError) return authError;
   try {
     const supabase = getSupabaseWrite();
     const url = new URL(request.url);
