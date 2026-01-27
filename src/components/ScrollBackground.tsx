@@ -2,7 +2,6 @@
 
 import Image from 'next/image';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef, useEffect, useState } from 'react';
 
 interface Props {
   eventsRef: React.RefObject<HTMLDivElement>;

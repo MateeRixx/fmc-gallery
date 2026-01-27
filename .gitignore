@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
-=======
 # Logs
 logs
 *.log
@@ -12,6 +7,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+.pnpm-debug.log*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -32,6 +28,9 @@ coverage
 # nyc test coverage
 .nyc_output
 
+# testing
+/coverage
+
 # Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
@@ -44,7 +43,9 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
-# Dependency directories
+# dependencies
+/node_modules
+/.pnp
 node_modules/
 jspm_packages/
 
@@ -53,6 +54,7 @@ web_modules/
 
 # TypeScript cache
 *.tsbuildinfo
+next-env.d.ts
 
 # Optional npm cache directory
 .npm
@@ -71,6 +73,13 @@ web_modules/
 
 # Yarn Integrity file
 .yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
 # dotenv environment variable files
 .env
@@ -83,11 +92,16 @@ web_modules/
 
 # Next.js build output
 .next
+/.next/
 out
+/out/
 
 # Nuxt.js build / generate output
 .nuxt
 dist
+
+# production
+/build
 
 # Gatsby files
 .cache/
@@ -100,7 +114,6 @@ dist
 
 # vuepress v2.x temp and cache directory
 .temp
-.cache
 
 # Sveltekit cache directory
 .svelte-kit/
@@ -132,50 +145,13 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
-# yarn v3
->>>>>>> 783454832fa212eba38b3079c3009662d6bebc90
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-<<<<<<< HEAD
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
+# Vite logs files
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
 # misc
 .DS_Store
 *.pem
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
 # vercel
 .vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-=======
-!.yarn/sdks
-!.yarn/versions
-
-# Vite logs files
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
->>>>>>> 783454832fa212eba38b3079c3009662d6bebc90

@@ -6,10 +6,8 @@ import {supabase} from "@/lib/supabase";
 import { Event } from "@/types";
 
  
-export default function Page({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ test?: string }> }) {
+export default function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = React.use(params);
-  const sp = React.use(searchParams);
-  const testMode = sp?.test === "1";
   const [event, setEvent] = useState<Omit<Event, 'id' | 'slug'> | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const sanitize = (u?: string | null) => (u || "").trim().replace(/\)+$/, "");
@@ -61,6 +59,6 @@ export default function Page({ params, searchParams }: { params: Promise<{ slug:
        }
      : undefined;
  
-   return <ClientGallery slug={slug} baseEvent={baseEvent} testMode={testMode} />;
+   return <ClientGallery slug={slug} baseEvent={baseEvent} />;
  }
  

@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import AddPhotoButton from "@/components/AddPhotoButton";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export type EventData = {
   name: string;
@@ -29,7 +29,7 @@ function GalleryImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export default function EventGalleryClient({ slug, event, testMode }: { slug: string; event: EventData; testMode: boolean }) {
+export default function EventGalleryClient({ slug, event }: { slug: string; event: EventData }) {
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -66,7 +66,6 @@ export default function EventGalleryClient({ slug, event, testMode }: { slug: st
       const zip = new JSZip();
       const folder = zip.folder(event.name || "event-gallery");
 
-      let downloaded = 0;
       for (const index of Array.from(selectedImages).sort((a, b) => a - b)) {
         const imageUrl = event.images[index];
         if (!imageUrl) continue;
@@ -76,7 +75,6 @@ export default function EventGalleryClient({ slug, event, testMode }: { slug: st
           const blob = await response.blob();
           const filename = `image-${String(index + 1).padStart(3, "0")}.jpg`;
           folder?.file(filename, blob);
-          downloaded++;
         } catch (err) {
           console.error(`Failed to download image ${index}:`, err);
         }

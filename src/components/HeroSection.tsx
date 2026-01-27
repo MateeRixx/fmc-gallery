@@ -1,8 +1,5 @@
 "use client";
 
-import Image from 'next/image';
-import { useRef } from 'react';
-
 export default function HeroSection({ onExploreClick }: { onExploreClick: () => void }) {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6">

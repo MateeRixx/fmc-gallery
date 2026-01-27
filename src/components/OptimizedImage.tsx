@@ -29,6 +29,7 @@ export default function OptimizedImage({
       quality={quality}
       priority={priority}
       sizes={sizes || defaultSizes}
+      alt={props.alt || ''}
     />
   );
 }

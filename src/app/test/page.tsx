@@ -63,7 +63,7 @@ export default function TestRLS() {
         return
       }
 
-      const { data, error } = await supabase.from('events').insert([{
+      const { error } = await supabase.from('events').insert([{
         title: `Test Event ${Date.now()}`,
         slug: `test-${Date.now()}`,
         description: 'Test description',
@@ -91,7 +91,7 @@ export default function TestRLS() {
         return
       }
 
-      const { data, error } = await supabase.from('events').insert([{
+      const { error } = await supabase.from('events').insert([{
         title: `Hacked Event ${Date.now()}`,
         slug: `hacked-${Date.now()}`,
         description: 'Hacked',

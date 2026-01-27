@@ -2,9 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import imageCompression from "browser-image-compression";
-import { supabase } from "@/lib/supabase";
 
 export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?: number | string | null; editingId?: number | string | null; onSuccess?: () => void }) {
   const currentId = editingId ?? eventId ?? null;

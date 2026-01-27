@@ -5,7 +5,6 @@ import { Navigation } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import EventCardBasic from '@/components/EventCardBasic';
-import Link from 'next/link';
 import { Event as GalleryEvent } from '@/types';
 
 interface Props {
