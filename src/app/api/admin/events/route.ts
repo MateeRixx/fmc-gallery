@@ -205,4 +205,4 @@ export async function DELETE(request: Request) {
     console.error("DELETE /api/admin/events error:", err);
     return Response.json({ error: errorMessage }, { status: 500 });
   }
-}see
+}
