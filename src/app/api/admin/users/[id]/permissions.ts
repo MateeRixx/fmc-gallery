@@ -1,52 +1,45 @@
 /**
- * API Route: POST /api/admin/users/[id]/permissions
+ * API Route: POST /api/admin/users/[id]/role
  * 
- * Grant or revoke specific permissions for an Executive
+ * Change a user's role
  * Only Head and Co-Head can perform this action
  * 
- * Request body:
- * {
- *   "permissions": ["canAddEvents", "canUploadPhotos", ...],
- *   "action": "set" | "grant" | "revoke"
- * }
+ * IMPORTANT: When promoting someone to Head, automatically demote the current Head to Executive
+ * Same logic applies for Co-Head
  * 
- * - "set": Replace all permissions with the provided list
- * - "grant": Add permissions from the list
- * - "revoke": Remove permissions from the list
+ * Yearly Handover Example:
+ * - Old Co-Head becomes new Head: PATCH /api/admin/users/oldCoHeadId/role { newRole: "head" }
+ * - Old Executive becomes new Co-Head: PATCH /api/admin/users/executiveId/role { newRole: "co_head" }
+ * - New Executives are added: POST /api/admin/users { email: "newperson@example.com", role: "executive" }
  */
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { requireSupremeAdmin } from "@/lib/middleware";
-import { User, Permission, UserRole, PermissionChangeResponse } from "@/types";
+import { User, UserRole, RoleChangeResponse } from "@/types";
 
-export async function POST(
+export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  // Await params (Next.js 15+ requirement)
+  const { id: userId } = await params;
+
   // Require Head or Co-Head
   const currentUser = await requireSupremeAdmin(request);
   if (currentUser instanceof Response) return currentUser;
 
   try {
     const body = await request.json();
-    const { permissions, action } = body;
+    const { newRole } = body;
 
-    if (!Array.isArray(permissions)) {
+    if (!newRole || !Object.values(UserRole).includes(newRole)) {
       return Response.json(
-        { error: "permissions must be an array" },
+        { error: "Invalid newRole. Must be one of: head, co_head, executive, member, inactive" },
         { status: 400 }
       );
     }
 
-    if (!["set", "grant", "revoke"].includes(action)) {
-      return Response.json(
-        { error: 'action must be "set", "grant", or "revoke"' },
-        { status: 400 }
-      );
-    }
-
-    const userId = params.id;
     if (!userId) {
       return Response.json(
         { error: "User ID is required" },
@@ -63,7 +56,7 @@ export async function POST(
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get the target user
+    // Get the user being promoted/demoted
     const { data: targetUser, error: fetchError } = await supabase
       .from("users")
       .select("*")
@@ -77,33 +70,58 @@ export async function POST(
       );
     }
 
-    // Can only manage permissions for Executives
-    if (targetUser.role !== UserRole.EXECUTIVE) {
-      return Response.json(
-        { error: "Can only manage permissions for Executives. Head/Co-Head have all permissions implicitly." },
-        { status: 400 }
-      );
+    const previousRole = targetUser.role;
+
+    // Handle role conflicts (only 1 Head and 1 Co-Head allowed)
+    if (newRole === UserRole.HEAD) {
+      // Demote current Head to Executive
+      const { data: currentHead } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", UserRole.HEAD)
+        .neq("id", userId)
+        .maybeSingle();
+
+      if (currentHead) {
+        await supabase
+          .from("users")
+          .update({
+            role: UserRole.EXECUTIVE,
+            role_updated_at: new Date().toISOString(),
+            role_updated_by: currentUser.sub,
+          })
+          .eq("id", currentHead.id);
+      }
+    } else if (newRole === UserRole.CO_HEAD) {
+      // Demote current Co-Head to Executive
+      const { data: currentCoHead } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", UserRole.CO_HEAD)
+        .neq("id", userId)
+        .maybeSingle();
+
+      if (currentCoHead) {
+        await supabase
+          .from("users")
+          .update({
+            role: UserRole.EXECUTIVE,
+            role_updated_at: new Date().toISOString(),
+            role_updated_by: currentUser.sub,
+          })
+          .eq("id", currentCoHead.id);
+      }
     }
 
-    let newPermissions: Permission[] = targetUser.permissions || [];
-
-    if (action === "set") {
-      // Replace all permissions
-      newPermissions = permissions;
-    } else if (action === "grant") {
-      // Add permissions
-      newPermissions = Array.from(new Set([...newPermissions, ...permissions]));
-    } else if (action === "revoke") {
-      // Remove permissions
-      newPermissions = newPermissions.filter((p: Permission) => !permissions.includes(p));
-    }
-
-    // Update user permissions
+    // Update the target user's role
     const { data: updatedUser, error: updateError } = await supabase
       .from("users")
       .update({
-        permissions: newPermissions,
-        updated_at: new Date().toISOString(),
+        role: newRole,
+        role_updated_at: new Date().toISOString(),
+        role_updated_by: currentUser.sub,
+        // Reset permissions when changing role (they'll be set per-role)
+        permissions: [],
       })
       .eq("id", userId)
       .select("*")
@@ -112,21 +130,22 @@ export async function POST(
     if (updateError || !updatedUser) {
       console.error("Update error:", updateError);
       return Response.json(
-        { error: "Failed to update permissions" },
+        { error: "Failed to update user role" },
         { status: 500 }
       );
     }
 
-    const response: PermissionChangeResponse = {
+    const response: RoleChangeResponse = {
       success: true,
-      message: `Successfully ${action}ed permissions for ${targetUser.email}`,
+      message: `Successfully changed role from ${previousRole} to ${newRole}`,
       user: updatedUser,
-      permissions: newPermissions,
+      previousRole,
+      newRole,
     };
 
     return Response.json(response);
   } catch (err) {
-    console.error("Error updating permissions:", err);
+    console.error("Error changing user role:", err);
     return Response.json(
       { error: "Internal server error" },
       { status: 500 }
