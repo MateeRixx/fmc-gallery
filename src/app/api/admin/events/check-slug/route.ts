@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Slug check error:", error);
       return Response.json(
-        { error: error.message },
+        { error: error instanceof Error ? error.message : String(error) },
         { status: 500 }
       );
     }

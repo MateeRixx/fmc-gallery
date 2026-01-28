@@ -73,7 +73,7 @@ export async function GET(request: Request) {
         .eq("id", id)
         .maybeSingle();
       if (error) {
-        return Response.json({ error: error.message }, { status: 500 });
+        return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
       }
       return Response.json({ data });
     }
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       .select("id, title")
       .order("id", { ascending: true });
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
     return Response.json({ data });
   } catch (err) {
@@ -166,7 +166,7 @@ export async function PUT(request: Request) {
     }
     const { error } = await supabase.from("events").update(updates).eq("id", id);
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
     return Response.json({ ok: true });
   } catch (err) {
@@ -197,7 +197,7 @@ export async function DELETE(request: Request) {
     }
     const { error } = await supabase.from("events").delete().eq("id", id);
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
     return Response.json({ ok: true });
   } catch (err) {
@@ -205,4 +205,4 @@ export async function DELETE(request: Request) {
     console.error("DELETE /api/admin/events error:", err);
     return Response.json({ error: errorMessage }, { status: 500 });
   }
-}
+}see
