@@ -15,14 +15,14 @@ import { UserRole, RoleChangeResponse } from "@/types";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Require Head or Co-Head
   const currentUser = await requireSupremeAdmin(request);
   if (currentUser instanceof Response) return currentUser;
 
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     if (!userId) {
       return Response.json(
         { error: "User ID is required" },

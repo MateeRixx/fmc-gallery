@@ -7,7 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { createJWT } from "@/lib/jwt";
-import { User } from "@/types";
+import { User, UserRole } from "@/types";
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       const mockUser: User = {
         id: "demo-user-123",
         email: normalized,
-        role: "head",
+        role: UserRole.HEAD,
         permissions: [],
         full_name: "Demo Admin",
       };

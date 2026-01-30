@@ -20,7 +20,7 @@ import { User, UserRole, RoleChangeResponse } from "@/types";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Require Head or Co-Head
   const currentUser = await requireSupremeAdmin(request);
@@ -37,7 +37,8 @@ export async function PATCH(
       );
     }
 
-    const userId = params.id;
+    const { id } = await params;
+    const userId = id;
     if (!userId) {
       return Response.json(
         { error: "User ID is required" },
