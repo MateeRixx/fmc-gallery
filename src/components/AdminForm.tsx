@@ -3,6 +3,8 @@
 
 import { useEffect, useState } from "react";
 import imageCompression from "browser-image-compression";
+import { getCurrentUser } from "@/lib/jwt";
+import { Permission, UserRole } from "@/types";
 
 export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?: number | string | null; editingId?: number | string | null; onSuccess?: () => void }) {
   const currentId = editingId ?? eventId ?? null;
@@ -15,13 +17,41 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
   const [existingCover, setExistingCover] = useState<string | null>(null);
   const [existingHeroImage, setExistingHeroImage] = useState<string | null>(null);
 
+  // Get auth token from localStorage
+  const getAuthToken = () => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("fmc-auth-token") || "";
+    }
+    return "";
+  };
+
   useEffect(() => {
     async function load() {
       if (!currentId) return;
       setStatus("Loading event...");
       try {
-        const loadRes = await fetch(`/api/admin/events?id=${encodeURIComponent(String(currentId))}`, { method: "GET" });
-        const j = await loadRes.json();
+        const token = getAuthToken();
+        const loadRes = await fetch(`/api/admin/events?id=${encodeURIComponent(String(currentId))}`, { 
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        
+        if (!loadRes.ok) {
+          setStatus(`Failed to load: ${loadRes.status}`);
+          return;
+        }
+
+        let j;
+        try {
+          j = await loadRes.json();
+        } catch (e) {
+          console.error("Failed to parse response as JSON:", e);
+          setStatus("Invalid response from server");
+          return;
+        }
+
         const ev = j?.data;
         if (ev) {
           setName(ev.title || "");
@@ -33,7 +63,8 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         } else {
           setStatus("Event not found");
         }
-      } catch {
+      } catch (e) {
+        console.error("Load error:", e);
         setStatus("Failed to load");
       }
     }
@@ -48,11 +79,31 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
     }
 
     try {
+      const token = getAuthToken();
+      if (!token) {
+        setStatus("Unauthorized. Please log in again.");
+        return;
+      }
+
+      const user = getCurrentUser();
+      if (!user) {
+        setStatus("Unauthorized. Please log in again.");
+        return;
+      }
+      const isSupreme = user.role === UserRole.HEAD || user.role === UserRole.CO_HEAD;
+      const canAdd = user.permissions?.includes(Permission.CAN_ADD_EVENTS);
+      const canEdit = user.permissions?.includes(Permission.CAN_EDIT_EVENTS);
+      const allowed = isSupreme || (currentId ? canEdit : canAdd);
+      if (!allowed) {
+        setStatus("Unauthorized. You don't have permission to manage events.");
+        return;
+      }
+      
       const slugRes = await fetch("/api/admin/events/check-slug", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}` 
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ slug, excludeId: currentId }),
       });
@@ -91,7 +142,7 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         const res = await fetch("/api/upload", { 
           method: "POST", 
           headers: {
-            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+            "Authorization": `Bearer ${token}`
           },
           body: fd 
         });
@@ -137,11 +188,15 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         method: currentId ? "PUT" : "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify(currentId ? { id: currentId, ...payload } : payload),
       });
 
+      if (eventRes.status === 401 || eventRes.status === 403) {
+        setStatus("Unauthorized. Please log in with a Head/Co-Head account.");
+        return;
+      }
       if (!eventRes.ok) {
         const j = await eventRes.json();
         setStatus(j.error || "Failed");
@@ -152,7 +207,7 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       await fetch("/api/revalidate?path=/", { 
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+          "Authorization": `Bearer ${token}`
         }
       });
       if (onSuccess) onSuccess();

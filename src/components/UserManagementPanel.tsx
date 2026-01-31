@@ -32,6 +32,11 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newFullName, setNewFullName] = useState("");
+  const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.MEMBER);
+  const [newUserPermissions, setNewUserPermissions] = useState<Permission[]>([]);
 
   // Fetch all users
   useEffect(() => {
@@ -184,13 +189,78 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
     );
   };
 
+  const toggleNewUserPermission = (perm: Permission) => {
+    setNewUserPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    );
+  };
+
+  async function handleAddUser() {
+    if (!newEmail.trim()) {
+      setError("Email is required");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("fmc-auth-token");
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: newEmail.trim(),
+          full_name: newFullName.trim() || undefined,
+          role: newUserRole,
+          permissions: newUserRole === UserRole.EXECUTIVE ? newUserPermissions : [],
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to create user");
+      }
+
+      const data = await response.json();
+      setMessage(data.message || "User created");
+      setShowAddUser(false);
+      setNewEmail("");
+      setNewFullName("");
+      setNewUserRole(UserRole.MEMBER);
+      setNewUserPermissions([]);
+      await fetchUsers();
+      onRefresh?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating user");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (loading) {
     return <div className="text-center text-gray-400 py-8">Loading users...</div>;
   }
 
   return (
     <div className="bg-gray-900 rounded-xl p-8 border border-gray-700">
-      <h2 className="text-3xl font-bold text-white mb-6">User Management</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-3xl font-bold text-white">User Management</h2>
+        <button
+          onClick={() => {
+            setShowAddUser(true);
+            setError("");
+            setMessage("");
+          }}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-semibold"
+        >
+          Add User
+        </button>
+      </div>
 
       {message && (
         <div className="mb-4 p-4 bg-green-900 border border-green-700 rounded text-green-200">
@@ -402,6 +472,88 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
                   setAction(null);
                   setSelectedUser(null);
                 }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {showAddUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-700">
+            <h3 className="text-xl font-bold text-white mb-4">Add New User</h3>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white"
+                  placeholder="user@domain.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Full Name (optional)</label>
+                <input
+                  type="text"
+                  value={newFullName}
+                  onChange={(e) => setNewFullName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white"
+                  placeholder="Full Name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Role</label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => {
+                    const role = e.target.value as UserRole;
+                    setNewUserRole(role);
+                    if (role !== UserRole.EXECUTIVE) {
+                      setNewUserPermissions([]);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white"
+                >
+                  {Object.values(UserRole).map((role) => (
+                    <option key={role} value={role}>{formatRole(role)}</option>
+                  ))}
+                </select>
+              </div>
+              {newUserRole === UserRole.EXECUTIVE && (
+                <div>
+                  <label className="block text-sm text-gray-300 mb-2">Executive Permissions</label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {getExecutivePermissions().map((perm) => (
+                      <label key={perm} className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newUserPermissions.includes(perm)}
+                          onChange={() => toggleNewUserPermission(perm)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-white text-sm">{formatPermission(perm)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddUser}
+                disabled={submitting}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded font-semibold"
+              >
+                {submitting ? "Adding..." : "Add User"}
+              </button>
+              <button
+                onClick={() => setShowAddUser(false)}
                 className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
               >
                 Cancel

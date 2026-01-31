@@ -1,21 +1,7 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-
-function authorize(request: Request): Response | null {
-  const expected = process.env.ADMIN_API_TOKEN;
-  if (!expected) {
-    return Response.json(
-      { error: "Service misconfigured: ADMIN_API_TOKEN missing" },
-      { status: 500 }
-    );
-  }
-  const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
-  const token = header?.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token !== expected) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
+import { NextRequest } from "next/server";
+import { requireSupremeAdmin } from "@/lib/middleware";
 
 function normalizeId(raw: unknown): string | number | null {
   if (raw === null || raw === undefined) return null;
@@ -55,9 +41,10 @@ function getSupabaseWrite() {
   }
 }
 
-export async function GET(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+export async function GET(request: NextRequest) {
+  const user = await requireSupremeAdmin(request);
+  if (user instanceof Response) return user;
+
   try {
     const supabase = await getSupabase();
     const url = new URL(request.url);
@@ -92,9 +79,10 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+export async function POST(request: NextRequest) {
+  const user = await requireSupremeAdmin(request);
+  if (user instanceof Response) return user;
+
   try {
     const supabase = getSupabaseWrite();
     const body = await request.json();
@@ -143,9 +131,10 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+export async function PUT(request: NextRequest) {
+  const user = await requireSupremeAdmin(request);
+  if (user instanceof Response) return user;
+
   try {
     const supabase = getSupabaseWrite();
     const body = await request.json();
@@ -176,9 +165,10 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+export async function DELETE(request: NextRequest) {
+  const user = await requireSupremeAdmin(request);
+  if (user instanceof Response) return user;
+
   try {
     const supabase = getSupabaseWrite();
     const url = new URL(request.url);

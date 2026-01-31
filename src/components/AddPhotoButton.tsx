@@ -3,6 +3,8 @@
 
 import { useState } from "react";
 import imageCompression from "browser-image-compression";
+import { getCurrentUser } from "@/lib/jwt";
+import { Permission, UserRole } from "@/types";
 
 const SAVE_CHUNK = 25; // insert photos in batches to keep requests small
 
@@ -13,13 +15,15 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   const [busy, setBusy] = useState(false);
 
   async function uploadViaApi(file: File) {
+    const token = localStorage.getItem("fmc-auth-token") || "";
+    if (!token) throw new Error("Unauthorized. Please log in again.");
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dir", `${eventSlug}/photos`);
     const res = await fetch("/api/upload", { 
       method: "POST", 
       headers: {
-        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        "Authorization": `Bearer ${token}`
       },
       body: fd 
     });
@@ -33,11 +37,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   }
 
   async function saveBatch(urls: string[], eventSlug: string) {
+    const token = localStorage.getItem("fmc-auth-token") || "";
+    if (!token) throw new Error("Unauthorized. Please log in again.");
     const res = await fetch("/api/admin/photos", {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || ""}`
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({ event_slug: eventSlug, urls }),
     });
@@ -48,6 +54,17 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   const handleUpload = async () => {
     if (files.length === 0) {
       setStatus("Select images to upload");
+      return;
+    }
+    const user = getCurrentUser();
+    if (!user) {
+      setStatus("Unauthorized. Please log in again.");
+      return;
+    }
+    const isSupreme = user.role === UserRole.HEAD || user.role === UserRole.CO_HEAD;
+    const canUpload = user.permissions?.includes(Permission.CAN_UPLOAD_PHOTOS);
+    if (!isSupreme && !canUpload) {
+      setStatus("Unauthorized. You don't have permission to upload photos.");
       return;
     }
     setBusy(true);

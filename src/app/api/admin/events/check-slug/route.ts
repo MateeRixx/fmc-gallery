@@ -1,25 +1,18 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-
-function authorize(request: Request): Response | null {
-  const expected = process.env.ADMIN_API_TOKEN;
-  if (!expected) {
-    return Response.json(
-      { error: "Service misconfigured: ADMIN_API_TOKEN missing" },
-      { status: 500 }
-    );
-  }
-
-  const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
-  const token = header?.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token !== expected) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
+import { requireAuth } from "@/lib/middleware";
+import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
+import { Permission } from "@/types";
 
 export async function POST(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+  const authResult = await requireAuth(request);
+  if (authResult instanceof Response) return authResult;
+  const canManage =
+    isSupremeAdmin(authResult.role) ||
+    hasPermission(authResult, Permission.CAN_ADD_EVENTS) ||
+    hasPermission(authResult, Permission.CAN_EDIT_EVENTS);
+  if (!canManage) {
+    return Response.json({ error: "Unauthorized" }, { status: 403 });
+  }
   try {
     const body: unknown = await request.json();
     const slug =

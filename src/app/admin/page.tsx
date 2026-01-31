@@ -5,11 +5,23 @@ import AdminContent from "./AdminContent";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export default async function AdminPage() {
-  const supabase = await getSupabaseServer();
-  const { data } = await supabase
-    .from("events")
-    .select("id, title, slug")
-    .order("id", { ascending: true });
-  const events = data || [];
-  return <AdminContent events={events} />;
+  try {
+    const supabase = await getSupabaseServer();
+    const { data, error } = await supabase
+      .from("events")
+      .select("id, title, slug")
+      .order("id", { ascending: true });
+    
+    if (error) {
+      console.error("Failed to fetch events:", error);
+      return <AdminContent events={[]} />;
+    }
+    
+    const events = data || [];
+    return <AdminContent events={events} />;
+  } catch (err) {
+    console.error("Admin page error:", err);
+    // Return empty events - AdminContent will handle auth check
+    return <AdminContent events={[]} />;
+  }
 }

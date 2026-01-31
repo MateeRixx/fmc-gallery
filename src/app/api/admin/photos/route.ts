@@ -1,25 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { NextRequest } from "next/server";
+import { requirePermission } from "@/lib/middleware";
+import { Permission } from "@/types";
 
-function authorize(request: Request): Response | null {
-  const expected = process.env.ADMIN_API_TOKEN;
-  if (!expected) {
-    return Response.json(
-      { error: "Service misconfigured: ADMIN_API_TOKEN missing" },
-      { status: 500 }
-    );
-  }
-
-  const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
-  const token = header?.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token !== expected) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
-}
-
-export async function POST(request: Request) {
-  const authError = authorize(request);
-  if (authError) return authError;
+export async function POST(request: NextRequest) {
+  const user = await requirePermission(request, Permission.CAN_UPLOAD_PHOTOS);
+  if (user instanceof Response) return user;
 
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

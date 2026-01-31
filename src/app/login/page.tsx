@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { storeToken, clearToken } from "@/lib/jwt";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,73 +12,66 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if already logged in
-    try {
-      const raw = localStorage.getItem("fmc-admin");
-      if (raw) {
-        const parsed = JSON.parse(raw) as { email?: string; expiry?: number };
-        const valid = !!parsed?.email && typeof parsed?.expiry === "number" && parsed.expiry > Date.now();
-        if (valid) {
-          router.push("/admin");
-        }
-      }
-    } catch {
-      // Silent fail
-    }
-  }, [router]);
+    // Always require email login when visiting the login page
+    clearToken();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setStatus("Checking credentials...");
-    const normalized = email.toLowerCase().trim();
     
+    const normalized = email.toLowerCase().trim();
+
+    // Strict validation - email MUST be provided
+    if (!normalized) {
+      setStatus("❌ Please enter an email address");
+      return;
+    }
+
+    if (!normalized.includes("@")) {
+      setStatus("❌ Please enter a valid email");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Authenticating...");
+
     try {
-      if (!normalized.includes("@")) {
-        setStatus("Please enter a valid email");
-        setLoading(false);
-        return;
-      }
+      // Call new login API
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: normalized }),
+      });
 
-      const isConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      let data;
+      const contentType = response.headers.get("content-type");
       
-      if (!isConfigured) {
-        // Demo mode
-        localStorage.setItem(
-          "fmc-admin",
-          JSON.stringify({ email: normalized || "admin", expiry: Date.now() + 30 * 24 * 60 * 60 * 1000 })
-        );
-        setStatus("✓ Login successful!");
-        setTimeout(() => {
-          window.location.href = "/admin";
-        }, 500);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("admins")
-        .select("email")
-        .eq("email", normalized)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Database error:", error);
-        setStatus("Database connection failed. Try again.");
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error("Failed to parse response as JSON. Content-Type:", contentType, "Status:", response.status);
+        setStatus("❌ Server error - invalid response");
         setLoading(false);
         return;
       }
 
-      if (data?.email) {
-        localStorage.setItem(
-          "fmc-admin",
-          JSON.stringify({ email: normalized, expiry: Date.now() + 30 * 24 * 60 * 60 * 1000 })
-        );
+      if (!response.ok) {
+        setStatus(`❌ ${data.error || "Login failed"}`);
+        setLoading(false);
+        return;
+      }
+
+      if (data.token) {
+        // Store JWT token
+        storeToken(data.token);
         setStatus("✓ Login successful!");
         setTimeout(() => {
-          window.location.href = "/admin";
+          router.push("/admin");
         }, 500);
       } else {
-        setStatus("❌ Email not authorized for admin access");
+        setStatus("❌ No token received");
         setLoading(false);
       }
     } catch (err) {
@@ -95,43 +88,41 @@ export default function LoginPage() {
           FMC
         </h1>
         <p className="text-center text-gray-300 text-sm mb-8">Admin Login</p>
-        
+
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="text-white text-sm font-semibold mb-2 block">Admin Email</label>
+            <label className="block text-gray-300 text-sm font-semibold mb-2">Email</label>
             <input
               type="email"
-              placeholder="admin@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-6 py-4 bg-white/10 rounded-xl text-white placeholder-gray-500 border border-white/20 focus:border-purple-500 transition focus:outline-none"
-              required
+              placeholder="your.email@club.com"
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/40"
               disabled={loading}
+              required
+              autoComplete="email"
             />
           </div>
-          
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-linear-to-r from-purple-600 to-pink-600 text-white text-xl font-bold rounded-xl hover:scale-105 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || !email.trim()}
+            className="w-full bg-white text-black font-bold py-3 rounded-lg hover:bg-gray-200 disabled:bg-gray-400 transition"
           >
-            {loading ? "Signing in..." : "SIGN IN"}
+            {loading ? "Logging in..." : "Login"}
           </button>
-          
-          <div className="text-center">
-            {status && (
-              <p className={`text-sm font-semibold ${status.includes("✓") ? "text-green-400" : status.includes("❌") ? "text-red-400" : "text-yellow-400"}`}>
-                {status}
-              </p>
-            )}
-          </div>
-
-          <div className="text-center pt-4 border-t border-white/20">
-            <p className="text-gray-400 text-xs">
-              Only authorized admin emails can access
-            </p>
-          </div>
         </form>
+
+        {status && (
+          <div className="mt-6 p-3 rounded-lg bg-white/10 border border-white/20 text-center text-sm text-gray-200">
+            {status}
+          </div>
+        )}
+
+        <div className="mt-8 text-center text-xs text-gray-400">
+          <p>This system now uses Role-Based Access Control.</p>
+          <p className="mt-2">Contact your Head or Co-Head for access.</p>
+        </div>
       </div>
     </div>
   );
