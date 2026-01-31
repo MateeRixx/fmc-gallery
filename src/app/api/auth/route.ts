@@ -7,7 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { createJWT } from "@/lib/jwt";
-import { User, UserRole } from "@/types";
+import { Permission, User, UserRole } from "@/types";
 
 export async function POST(request: Request) {
   try {
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       "executive@club.com": { 
         role: UserRole.EXECUTIVE, 
         full_name: "Executive",
-        permissions: ["canAddEvents", "canUploadPhotos"]
+        permissions: [Permission.CAN_ADD_EVENTS, Permission.CAN_UPLOAD_PHOTOS]
       },
       "member@club.com": { role: UserRole.MEMBER, full_name: "Club Member" },
     };
