@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
-    qualities: [70, 75],
+    qualities: [70, 75, 80],
     remotePatterns: [
       {
         protocol: "https",
@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "*.supabase.co",
+        hostname: "utdtmmckfabhyiptbxow.supabase.co",
         port: "",
         pathname: "/**",
       },

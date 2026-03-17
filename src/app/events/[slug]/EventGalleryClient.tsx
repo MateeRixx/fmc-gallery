@@ -21,7 +21,7 @@ function GalleryImage({ src, alt }: { src: string; alt: string }) {
       width={800}
       height={600}
       loading="lazy"
-      quality={80}
+      unoptimized
       sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setVisible(false)}
       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"

@@ -38,7 +38,14 @@ export async function POST(request: Request) {
       return Response.json({ error: "Only image uploads are allowed" }, { status: 415 });
     }
 
-    const ext = file.name.split(".").pop() || "bin";
+    const mimeToExt: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/jpg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+    };
+    const ext = mimeToExt[file.type] || file.name.split(".").pop() || "jpg";
     const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
     const { error } = await supabase.storage

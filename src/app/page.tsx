@@ -58,7 +58,7 @@ export default function Home() {
           .order("id", { ascending: true });
 
         if (error) {
-          console.error("Failed to fetch events:", error instanceof Error ? error.message : String(error));
+          console.error("Failed to fetch events:", error.message, error.code, error.details);
           return;
         }
 
