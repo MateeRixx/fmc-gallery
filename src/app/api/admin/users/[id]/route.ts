@@ -104,7 +104,7 @@ export async function PATCH(
         await supabase
           .from("users")
           .update({
-            role: UserRole.CO_HEAD,
+            role: UserRole.EXECUTIVE,
             role_updated_at: new Date().toISOString(),
             role_updated_by: currentUser.sub,
           })
