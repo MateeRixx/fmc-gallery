@@ -1,14 +1,24 @@
-// src/app/login/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { storeToken, getCurrentUser } from "@/lib/jwt";
+import { getCurrentUser } from "@/lib/jwt";
+import SignInForm from "@/components/auth/SignInForm";
+import SignUpForm from "@/components/auth/SignUpForm";
+import OTPVerificationForm from "@/components/auth/OTPVerificationForm";
+
+type AuthStep = "signin" | "signup" | "otp";
+
+interface OTPStepData {
+  email: string;
+  fullName: string;
+  role: string;
+}
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  const [authStep, setAuthStep] = useState<AuthStep>("signin");
+  const [otpData, setOtpData] = useState<OTPStepData | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -18,113 +28,89 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignUpOTPNeeded = (email: string, fullName: string, role: string) => {
+    setOtpData({ email, fullName, role });
+    setAuthStep("otp");
+  };
 
-    const normalized = email.toLowerCase().trim();
+  const handleBackToSignUp = () => {
+    setAuthStep("signup");
+    setOtpData(null);
+  };
 
-    // Strict validation - email MUST be provided
-    if (!normalized) {
-      setStatus("❌ Please enter an email address");
-      return;
-    }
-
-    if (!normalized.includes("@")) {
-      setStatus("❌ Please enter a valid email");
-      return;
-    }
-
-    setLoading(true);
-    setStatus("Authenticating...");
-
-    try {
-      // Call new login API
-      const response = await fetch("/api/auth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: normalized }),
-      });
-
-      let data;
-      const contentType = response.headers.get("content-type");
-
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.error("Failed to parse response as JSON. Content-Type:", contentType, "Status:", response.status);
-        setStatus("❌ Server error - invalid response");
-        setLoading(false);
-        return;
-      }
-
-      if (!response.ok) {
-        setStatus(`❌ ${data.error || "Login failed"}`);
-        setLoading(false);
-        return;
-      }
-
-      if (data.token) {
-        // Store JWT token
-        storeToken(data.token);
-        setStatus("✓ Login successful!");
-        setTimeout(() => {
-          router.push("/admin");
-        }, 500);
-      } else {
-        setStatus("❌ No token received");
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error("Login error:", err);
-      setStatus("❌ Connection error. Please try again.");
-      setLoading(false);
-    }
+  const handleTabChange = (tab: "signin" | "signup") => {
+    setActiveTab(tab);
+    setAuthStep(tab === "signin" ? "signin" : "signup");
+    setOtpData(null);
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-6">
-      <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-12 max-w-md w-full border border-white/20">
-        <h1 className="text-5xl font-black text-white text-center mb-2">
-          FMC
-        </h1>
-        <p className="text-center text-gray-300 text-sm mb-8">Admin Login</p>
+    <div className="min-h-screen bg-black flex items-center justify-center px-6 py-8">
+      <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 max-w-md w-full border border-white/20">
+        {/* Header */}
+        <h1 className="text-5xl font-black text-white text-center mb-2">FMC</h1>
+        <p className="text-center text-gray-300 text-sm mb-8">Gallery & Events Management</p>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-gray-300 text-sm font-semibold mb-2">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your.email@club.com"
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/40"
-              disabled={loading}
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !email.trim()}
-            className="w-full bg-white text-black font-bold py-3 rounded-lg hover:bg-gray-200 disabled:bg-gray-400 transition"
-          >
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-
-        {status && (
-          <div className="mt-6 p-3 rounded-lg bg-white/10 border border-white/20 text-center text-sm text-gray-200">
-            {status}
+        {/* Tabs - Only show when not in OTP step */}
+        {authStep !== "otp" && (
+          <div className="flex gap-2 mb-8">
+            <button
+              onClick={() => handleTabChange("signin")}
+              className={`flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition ${
+                activeTab === "signin"
+                  ? "bg-white text-black"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => handleTabChange("signup")}
+              className={`flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition ${
+                activeTab === "signup"
+                  ? "bg-white text-black"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
         )}
 
-        <div className="mt-8 text-center text-xs text-gray-400">
-          <p>This system now uses Role-Based Access Control.</p>
-          <p className="mt-2">Contact your Head or Co-Head for access.</p>
-        </div>
+        {/* Content */}
+        {authStep === "signin" && (
+          <SignInForm
+            onSuccess={() => {
+              // Redirect handled by SignInForm itself
+            }}
+          />
+        )}
+
+        {authStep === "signup" && (
+          <SignUpForm onOTPNeeded={handleSignUpOTPNeeded} />
+        )}
+
+        {authStep === "otp" && otpData && (
+          <OTPVerificationForm
+            email={otpData.email}
+            fullName={otpData.fullName}
+            role={otpData.role}
+            onBack={handleBackToSignUp}
+          />
+        )}
+
+        {/* Footer Info */}
+        {authStep !== "otp" && (
+          <div className="mt-8 text-center text-xs text-gray-400 space-y-2">
+            <p>Role-Based Access Control enabled</p>
+            {activeTab === "signin" && (
+              <p>No account yet? Click "Sign Up" to create one.</p>
+            )}
+            {activeTab === "signup" && (
+              <p>Already have an account? Click "Sign In".</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
