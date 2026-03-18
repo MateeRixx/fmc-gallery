@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { storeToken, clearToken } from "@/lib/jwt";
+import { storeToken, getCurrentUser } from "@/lib/jwt";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,13 +12,15 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Always require email login when visiting the login page
-    clearToken();
-  }, []);
+    // If already logged in, redirect to admin
+    if (getCurrentUser()) {
+      router.replace("/admin");
+    }
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const normalized = email.toLowerCase().trim();
 
     // Strict validation - email MUST be provided
@@ -47,7 +49,7 @@ export default function LoginPage() {
 
       let data;
       const contentType = response.headers.get("content-type");
-      
+
       try {
         data = await response.json();
       } catch (e) {

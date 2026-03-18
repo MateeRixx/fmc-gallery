@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { getCurrentUser, clearToken } from "@/lib/jwt";
 
 type NavbarProps = {
   onEventsClick?: () => void;
@@ -12,35 +13,23 @@ type NavbarProps = {
 
 export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminEmail, setAdminEmail] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("fmc-admin");
-      if (raw) {
-        const parsed = JSON.parse(raw) as { email?: string; expiry?: number };
-        const valid =
-          !!parsed?.email &&
-          typeof parsed?.expiry === "number" &&
-          parsed.expiry > Date.now();
-        if (valid && parsed.email) {
-          // Defer state updates to avoid synchronous setState inside effect
-          setTimeout(() => {
-            setIsAdmin(true);
-            setAdminEmail(parsed.email as string);
-          }, 0);
-        }
-      }
+      const user = getCurrentUser();
+      setCurrentUser(user);
     } catch {
       // Silent fail
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("fmc-admin");
-    setIsAdmin(false);
-    setAdminEmail("");
+    clearToken();
+    setCurrentUser(null);
     router.push("/");
   };
 
@@ -94,16 +83,16 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
           </div>
 
           <div className="flex items-center space-x-6">
-            {isAdmin ? (
+            {!isLoading && currentUser ? (
               <>
                 <div className="flex items-center gap-3 bg-purple-600/30 px-4 py-2 rounded-full border border-purple-500/50">
                   <div className="w-8 h-8 bg-linear-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
                     <span className="text-white font-bold text-sm">
-                      {adminEmail.charAt(0).toUpperCase()}
+                      {currentUser.email.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <span className="text-white text-sm font-semibold hidden sm:inline">
-                    {adminEmail.split("@")[0]}
+                    {currentUser.email.split("@")[0]}
                   </span>
                 </div>
                 <Link

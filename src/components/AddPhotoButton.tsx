@@ -21,6 +21,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   const [driveUrl, setDriveUrl] = useState("");
   const [driveStatus, setDriveStatus] = useState("");
   const [driveBusy, setDriveBusy] = useState(false);
+  const [driveProgress, setDriveProgress] = useState(0);
 
   // ── Device upload helpers ────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     if (!token) { setDriveStatus("Unauthorized. Please log in again."); return; }
 
     setDriveBusy(true);
+    setDriveProgress(0);
     setDriveStatus("Connecting to Google Drive...");
     try {
       const res = await fetch("/api/admin/import-from-drive", {
@@ -119,15 +121,61 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
         },
         body: JSON.stringify({ folder_url: driveUrl.trim(), event_slug: eventSlug }),
       });
-      const j = await res.json().catch(() => ({}));
+
       if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
         setDriveStatus(`✗ ${j.error || "Import failed"}`);
+        setDriveBusy(false);
         return;
       }
-      const skippedNote = j.skipped > 0 ? ` (${j.skipped} skipped)` : "";
-      setDriveStatus(`✓ Imported ${j.count} photo(s)${skippedNote}`);
-      setDriveUrl("");
-      setTimeout(() => window.location.reload(), 1500);
+
+      // Handle SSE stream
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                setDriveStatus(`✗ ${data.error}`);
+                setDriveBusy(false);
+                return;
+              }
+
+              if (data.complete) {
+                const skippedNote = data.skipped > 0 ? ` (${data.skipped} skipped)` : "";
+                setDriveStatus(`✓ Imported ${data.count} photo(s)${skippedNote}`);
+                setDriveUrl("");
+                setDriveProgress(100);
+                setTimeout(() => window.location.reload(), 1500);
+                return;
+              }
+
+              if (data.progress !== undefined) {
+                setDriveProgress(data.progress);
+                setDriveStatus(data.status || "Processing...");
+              }
+            } catch (e) {
+              console.error("Failed to parse SSE data:", e);
+            }
+          }
+        }
+      }
+
+      setDriveStatus("✗ Stream ended unexpectedly");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err ?? "Unknown error");
       setDriveStatus(`✗ Error: ${msg}`);
@@ -240,6 +288,17 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
                   <p className="text-sm text-gray-300">
                     {driveStatus || "Photos are downloaded server-side and stored in Supabase. Up to 300 images per import."}
                   </p>
+                  {driveBusy && driveProgress > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-[#FFBF00] h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${driveProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400">{driveProgress}% complete</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <button onClick={handleDriveImport} disabled={!driveUrl.trim() || driveBusy} className={btnClass}>

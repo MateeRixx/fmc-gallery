@@ -119,45 +119,99 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "No PNG or JPEG images found in that folder" }, { status: 404 });
   }
 
-  // Download each file, upload to Supabase Storage, collect public URLs
-  const uploadedUrls: string[] = [];
-  const errors: string[] = [];
+  // Return SSE stream for progress tracking
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const uploadedUrls: string[] = [];
+      const errors: string[] = [];
+      const total = driveFiles.length;
 
-  for (const file of driveFiles) {
-    try {
-      const buffer = await downloadDriveFile(file.id, apiKey);
-      const ext = file.name.split(".").pop() || "jpg";
-      const storagePath = `${event_slug}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      try {
+        for (let i = 0; i < driveFiles.length; i++) {
+          const file = driveFiles[i];
+          const progress = Math.round(((i + 1) / total) * 100);
 
-      const { error: uploadError } = await supabase.storage
-        .from("event-images")
-        .upload(storagePath, buffer, { contentType: file.mimeType });
+          try {
+            const buffer = await downloadDriveFile(file.id, apiKey);
+            const ext = file.name.split(".").pop() || "jpg";
+            const storagePath = `${event_slug}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-      if (uploadError) {
-        errors.push(`${file.name}: ${uploadError.message}`);
-        continue;
+            const { error: uploadError } = await supabase.storage
+              .from("event-images")
+              .upload(storagePath, buffer, { contentType: file.mimeType });
+
+            if (uploadError) {
+              errors.push(`${file.name}: ${uploadError.message}`);
+            } else {
+              const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(storagePath);
+              uploadedUrls.push(urlData.publicUrl);
+            }
+          } catch (err) {
+            errors.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+
+          // Send progress update
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                progress,
+                current: i + 1,
+                total,
+                status: `Processed ${i + 1}/${total} images...`,
+              })}\n\n`
+            )
+          );
+        }
+
+        // Save uploaded URLs to photos table in batches
+        if (uploadedUrls.length > 0) {
+          const rows = uploadedUrls.map((path) => ({ event_id: event.id, path }));
+          const { error: insertError } = await supabase.from("photos").insert(rows);
+          if (insertError) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  error: `Photos saved to storage but DB insert failed: ${insertError.message}`,
+                })}\n\n`
+              )
+            );
+            controller.close();
+            return;
+          }
+        }
+
+        // Send final result
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              complete: true,
+              count: uploadedUrls.length,
+              skipped: errors.length,
+              errors: errors.length > 0 ? errors : undefined,
+            })}\n\n`
+          )
+        );
+        controller.close();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              error: msg,
+            })}\n\n`
+          )
+        );
+        controller.close();
       }
+    },
+  });
 
-      const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(storagePath);
-      uploadedUrls.push(urlData.publicUrl);
-    } catch (err) {
-      errors.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  // Save uploaded URLs to photos table in batches
-  if (uploadedUrls.length > 0) {
-    const rows = uploadedUrls.map((path) => ({ event_id: event.id, path }));
-    const { error: insertError } = await supabase.from("photos").insert(rows);
-    if (insertError) {
-      return Response.json({ error: `Photos saved to storage but DB insert failed: ${insertError.message}` }, { status: 500 });
-    }
-  }
-
-  return Response.json({
-    ok: true,
-    count: uploadedUrls.length,
-    skipped: errors.length,
-    ...(errors.length > 0 && { errors }),
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   });
 }

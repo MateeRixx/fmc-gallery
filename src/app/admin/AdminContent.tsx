@@ -39,6 +39,10 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
       router.replace("/login");
     }
   }, [router]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
   async function fetchEvents() {
     try {
       const token = localStorage.getItem("fmc-auth-token") || "";
@@ -86,8 +90,36 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
     }
   }
   return (
-    <div className="min-h-screen bg-black text-white py-20">
-      <div className="max-w-6xl mx-auto px-6">
+    <div className="min-h-screen bg-black text-white">
+      {/* Header with User Info and Logout */}
+      <div className="sticky top-0 z-50 bg-black/95 backdrop-blur-sm border-b border-white/10 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-purple-600/20 border border-purple-500/50 rounded-full px-4 py-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full mr-2" />
+              <span className="text-sm text-gray-300">
+                {currentUser?.email}
+              </span>
+              <span className="text-xs text-purple-400 ml-3 px-2 py-1 bg-purple-500/20 rounded-full">
+                {currentUser?.role}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              clearToken();
+              router.replace("/login");
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600/20 hover:bg-red-600/40 border border-red-500/50 rounded-lg transition"
+            title="Sign out"
+          >
+            <span>↪</span>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-20">
         <h1 className="text-7xl font-black mb-12 text-white text-center">
           ADMIN PANEL
         </h1>
@@ -143,15 +175,6 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
 
         {/* Action Buttons */}
         <div className="flex gap-4 justify-center">
-          <button
-            onClick={() => {
-              clearToken();
-              window.location.href = "/";
-            }}
-            className="px-8 py-4 bg-red-600 text-white rounded-full transition font-bold shadow-lg shadow-red-500/30 hover:bg-red-500 hover:-translate-y-0.5 hover:shadow-red-500/50 active:translate-y-0 active:shadow-red-500/30"
-          >
-            Logout
-          </button>
           <button
             onClick={() => window.location.href = "/"}
             className="px-8 py-4 bg-purple-600 text-white rounded-full transition font-bold shadow-lg shadow-purple-500/30 hover:bg-purple-500 hover:-translate-y-0.5 hover:shadow-purple-500/50 active:translate-y-0 active:shadow-purple-500/30"

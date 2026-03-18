@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import AddPhotoButton from "@/components/AddPhotoButton";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export type EventData = {
   name: string;
@@ -11,8 +11,9 @@ export type EventData = {
   images: readonly string[];
 };
 
-function GalleryImage({ src, alt }: { src: string; alt: string }) {
+function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSelected?: boolean }) {
   const [visible, setVisible] = useState(true);
+
   if (!visible) return null;
   return (
     <Image
@@ -33,6 +34,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const longPressTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   const toggleImageSelection = (index: number) => {
     const newSelected = new Set(selectedImages);
@@ -42,6 +44,29 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
       newSelected.add(index);
     }
     setSelectedImages(newSelected);
+  };
+
+  const enterSelectionAndSelect = (index: number) => {
+    setIsSelectionMode(true);
+    toggleImageSelection(index);
+  };
+
+  const handleImageMouseDown = (index: number) => {
+    const timer = setTimeout(() => {
+      enterSelectionAndSelect(index);
+    }, 500);
+    longPressTimers.current.set(index, timer);
+  };
+
+  const handleImageMouseUp = (index: number) => {
+    const timer = longPressTimers.current.get(index);
+    if (timer) clearTimeout(timer);
+  };
+
+  const handleImageDoubleClick = (index: number) => {
+    const timer = longPressTimers.current.get(index);
+    if (timer) clearTimeout(timer);
+    enterSelectionAndSelect(index);
   };
 
   const toggleSelectAll = () => {
@@ -55,6 +80,27 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
   const exitSelectionMode = () => {
     setIsSelectionMode(false);
     setSelectedImages(new Set());
+  };
+
+  const downloadSingleImage = async (index: number) => {
+    const imageUrl = event.images[index];
+    if (!imageUrl) return;
+
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `image-${String(index + 1).padStart(3, "0")}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(`Failed to download image ${index}:`, err);
+      alert("Error downloading image. Please try again.");
+    }
   };
 
   const downloadSelectedAsZip = async () => {
@@ -166,11 +212,22 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
                 className="mb-6 break-inside-avoid opacity-0 translate-y-6 animate-fadeIn"
                 style={{ animationDelay: `${i * 0.15}s`, animationFillMode: "forwards" }}
               >
-                <div className="group relative overflow-hidden rounded-2xl shadow-2xl transition-transform duration-300 hover:-translate-y-1 cursor-pointer" onClick={() => isSelectionMode && toggleImageSelection(i)}>
+                <div
+                  className="group relative overflow-hidden rounded-2xl shadow-2xl transition-transform duration-300 hover:-translate-y-1 cursor-pointer select-none"
+                  onClick={() => isSelectionMode && toggleImageSelection(i)}
+                  onMouseDown={() => handleImageMouseDown(i)}
+                  onMouseUp={() => handleImageMouseUp(i)}
+                  onMouseLeave={() => handleImageMouseUp(i)}
+                  onDoubleClick={() => handleImageDoubleClick(i)}
+                >
                   <div className="relative w-full h-full">
-                    <GalleryImage src={src} alt={`${event.name} gallery ${i + 1}`} />
+                    <GalleryImage
+                      src={src}
+                      alt={`${event.name} gallery ${i + 1}`}
+                      isSelected={selectedImages.has(i)}
+                    />
                     <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    
+
                     {/* Selection checkbox - only in selection mode */}
                     {isSelectionMode && (
                       <div className="absolute top-4 left-4 z-10 opacity-100">
@@ -181,6 +238,21 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
                           className="w-6 h-6 cursor-pointer accent-purple-500"
                           onClick={(e) => e.stopPropagation()}
                         />
+                      </div>
+                    )}
+
+                    {/* Quick download button for single selected image */}
+                    {selectedImages.has(i) && selectedImages.size === 1 && (
+                      <div className="absolute bottom-4 right-4 z-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadSingleImage(i);
+                          }}
+                          className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-lg transition font-semibold shadow-lg shadow-purple-500/30"
+                        >
+                          ↓ Download
+                        </button>
                       </div>
                     )}
                   </div>
