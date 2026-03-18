@@ -36,11 +36,14 @@ export async function POST(request: NextRequest) {
       event_id: id,
       path: (url || "").trim(),
     }));
-    const { error } = await supabase.from("photos").insert(rows);
+    const { data, error } = await supabase
+      .from("photos")
+      .insert(rows)
+      .select("id, event_id, path");
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
-    return Response.json({ ok: true, count: rows.length });
+    return Response.json({ ok: true, count: rows.length, photos: data ?? [] });
   } catch {
     return Response.json({ error: "Insert failed" }, { status: 500 });
   }

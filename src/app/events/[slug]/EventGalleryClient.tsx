@@ -2,13 +2,21 @@
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import AddPhotoButton from "@/components/AddPhotoButton";
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type EventData = {
+  id: string;
   name: string;
   description: string;
   bgImage: string;
   images: readonly string[];
+};
+
+type EventPerson = {
+  id: number;
+  face_count: number;
+  photo_count: number;
+  cover_url: string | null;
 };
 
 function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSelected?: boolean }) {
@@ -34,7 +42,85 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [matchedPhotoUrls, setMatchedPhotoUrls] = useState<Set<string> | null>(null);
+  const [eventPeople, setEventPeople] = useState<EventPerson[]>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [peopleStatus, setPeopleStatus] = useState("");
+  const [loadingPeople, setLoadingPeople] = useState(false);
+  const [loadingPersonPhotos, setLoadingPersonPhotos] = useState(false);
   const longPressTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
+
+  const galleryImages = matchedPhotoUrls
+    ? event.images.filter((url) => matchedPhotoUrls.has(url))
+    : event.images;
+
+  useEffect(() => {
+    setSelectedImages((prev) => {
+      const filtered = new Set(Array.from(prev).filter((index) => index < galleryImages.length));
+      return filtered;
+    });
+  }, [galleryImages.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEventPeople() {
+      if (!event.id) return;
+
+      setLoadingPeople(true);
+      setPeopleStatus("");
+      try {
+        const response = await fetch(`/api/faces/people?event_id=${encodeURIComponent(event.id)}&limit=120`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (!cancelled) setPeopleStatus(data.error || "Failed to load people for this event");
+          return;
+        }
+
+        if (!cancelled) {
+          setEventPeople((data.people || []) as EventPerson[]);
+        }
+      } catch (error) {
+        console.error("Failed to load event people:", error);
+        if (!cancelled) setPeopleStatus("Failed to load people for this event.");
+      } finally {
+        if (!cancelled) setLoadingPeople(false);
+      }
+    }
+
+    loadEventPeople();
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id]);
+
+  async function applyPersonFilter(personId: number) {
+    setSelectedPersonId(personId);
+    setLoadingPersonPhotos(true);
+    try {
+      const response = await fetch(
+        `/api/faces/people/${personId}?event_id=${encodeURIComponent(event.id)}`
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setPeopleStatus(data.error || "Failed to load person matches");
+        return;
+      }
+
+      const urls = ((data.photos || []) as Array<{ photo_url: string }>).map((row) => row.photo_url);
+      setMatchedPhotoUrls(new Set(urls));
+      setIsSelectionMode(false);
+      setSelectedImages(new Set());
+      setPeopleStatus(urls.length ? "" : "No matched photos for this person in this event.");
+    } catch (error) {
+      console.error("Failed to apply person filter:", error);
+      setPeopleStatus("Failed to apply person filter.");
+    } finally {
+      setLoadingPersonPhotos(false);
+    }
+  }
 
   const toggleImageSelection = (index: number) => {
     const newSelected = new Set(selectedImages);
@@ -70,10 +156,10 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
   };
 
   const toggleSelectAll = () => {
-    if (selectedImages.size === event.images.length) {
+    if (selectedImages.size === galleryImages.length) {
       setSelectedImages(new Set());
     } else {
-      setSelectedImages(new Set(event.images.map((_, i) => i)));
+      setSelectedImages(new Set(galleryImages.map((_, i) => i)));
     }
   };
 
@@ -83,7 +169,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
   };
 
   const downloadSingleImage = async (index: number) => {
-    const imageUrl = event.images[index];
+    const imageUrl = galleryImages[index];
     if (!imageUrl) return;
 
     try {
@@ -113,7 +199,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
       const folder = zip.folder(event.name || "event-gallery");
 
       for (const index of Array.from(selectedImages).sort((a, b) => a - b)) {
-        const imageUrl = event.images[index];
+        const imageUrl = galleryImages[index];
         if (!imageUrl) continue;
 
         try {
@@ -166,9 +252,69 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
       </section>
       <section className="py-20 px-6 bg-black">
         <div className="max-w-7xl mx-auto">
+          <div className="mb-8 rounded-2xl border border-white/15 bg-white/5 p-5 md:p-6">
+            <h3 className="text-2xl font-bold text-white">People In This Event</h3>
+            <p className="text-sm text-gray-300 mt-1">
+              Select a detected person to filter this event gallery.
+            </p>
+
+            {loadingPeople ? (
+              <p className="mt-4 text-sm text-gray-300">Loading people clusters...</p>
+            ) : eventPeople.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-400">
+                No people detected yet for this event. Upload face photos and run reclustering.
+              </p>
+            ) : (
+              <div className="mt-4 grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 gap-3">
+                {eventPeople.map((person) => (
+                  <button
+                    key={person.id}
+                    onClick={() => applyPersonFilter(person.id)}
+                    disabled={loadingPersonPhotos}
+                    className={`rounded-xl overflow-hidden border transition ${
+                      selectedPersonId === person.id
+                        ? "border-[#FFBF00] bg-[#FFBF00]/10"
+                        : "border-white/20 bg-black/30 hover:border-white/40"
+                    }`}
+                    title={`Person ${person.id}`}
+                  >
+                    <div className="aspect-square bg-white/5">
+                      {person.cover_url ? (
+                        <img src={person.cover_url} alt={`Person ${person.id}`} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">No cover</div>
+                      )}
+                    </div>
+                    <div className="px-2 py-1 text-[10px] text-gray-200">{person.photo_count} photo(s)</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {peopleStatus && <p className="mt-3 text-xs text-yellow-200">{peopleStatus}</p>}
+          </div>
+
+          {matchedPhotoUrls && (
+            <div className="mb-8 flex items-center justify-between gap-4 rounded-lg border border-[#FFBF00]/40 bg-[#FFBF00]/10 p-4">
+              <p className="text-sm text-yellow-200">
+                Showing {galleryImages.length} matched image(s) in this event.
+              </p>
+              <button
+                onClick={() => {
+                  setMatchedPhotoUrls(null);
+                  setSelectedPersonId(null);
+                  setPeopleStatus("");
+                }}
+                className="px-4 py-2 rounded-md border border-white/30 text-sm text-white hover:bg-white/10 transition"
+              >
+                Clear Face Filter
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-12">
             <h2 className="text-5xl font-bold text-white">Gallery</h2>
-            {event.images.length > 0 && (
+            {galleryImages.length > 0 && (
               <div className="flex items-center gap-4">
                 {!isSelectionMode ? (
                   <button
@@ -183,7 +329,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
                       onClick={toggleSelectAll}
                       className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/25 text-white text-sm rounded-full transition"
                     >
-                      {selectedImages.size === event.images.length ? "Deselect All" : "Select All"}
+                      {selectedImages.size === galleryImages.length ? "Deselect All" : "Select All"}
                     </button>
                     {selectedImages.size > 0 && (
                       <button
@@ -206,7 +352,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
             )}
           </div>
           <div className="columns-1 md:columns-2 lg:columns-3 gap-6 [column-fill:balance]">
-            {event.images.map((src, i) => (
+            {galleryImages.map((src, i) => (
               <div
                 key={i}
                 className="mb-6 break-inside-avoid opacity-0 translate-y-6 animate-fadeIn"

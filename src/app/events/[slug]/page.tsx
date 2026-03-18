@@ -3,12 +3,18 @@
 import React, { useEffect, useState } from "react";
 import ClientGallery from "./ClientGallery";
 import {supabase} from "@/lib/supabase";
-import { Event } from "@/types";
+
+type LoadedEvent = {
+  id: string;
+  title: string;
+  description: string;
+  cover_url: string | null;
+};
 
  
 export default function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = React.use(params);
-  const [event, setEvent] = useState<Omit<Event, 'id' | 'slug'> | null>(null);
+  const [event, setEvent] = useState<LoadedEvent | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const sanitize = (u?: string | null) => (u || "").trim().replace(/\)+$/, "");
  
@@ -25,7 +31,18 @@ export default function Page({ params }: { params: Promise<{ slug: string }> }) 
          if (evError) {
            console.error("Error fetching event:", evError);
          }
-         if (!cancelled) setEvent(ev ? { title: ev.title, description: ev.description, cover_url: ev.hero_image_url } : null);
+         if (!cancelled) {
+           setEvent(
+             ev
+               ? {
+                   id: String(ev.id),
+                   title: ev.title,
+                   description: ev.description,
+                   cover_url: ev.hero_image_url,
+                 }
+               : null
+           );
+         }
 
          // First get the event ID, then fetch photos
          if (ev?.id) {
@@ -52,6 +69,7 @@ export default function Page({ params }: { params: Promise<{ slug: string }> }) 
  
    const baseEvent = event
      ? {
+         id: event.id,
          name: event.title,
          description: event.description,
          bgImage: sanitize(event.cover_url) || "/images/hero.jpg",

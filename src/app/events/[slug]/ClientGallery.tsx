@@ -3,6 +3,7 @@ import EventGalleryClient, { type EventData } from "./EventGalleryClient";
 
 export default function ClientGallery({ slug, baseEvent }: { slug: string; baseEvent?: EventData }) {
   const event: EventData = baseEvent ?? {
+    id: "",
     name: "Event",
     description: "",
     bgImage: "/images/hero.jpg",

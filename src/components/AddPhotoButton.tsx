@@ -5,8 +5,27 @@ import { useState } from "react";
 import imageCompression from "browser-image-compression";
 import { getCurrentUser } from "@/lib/jwt";
 import { Permission, UserRole } from "@/types";
+import {
+  extractFaceEmbeddings,
+  prepareFaceEmbeddingModels,
+  type DetectedFace,
+} from "@/lib/faceEmbedding";
 
 const SAVE_CHUNK = 25;
+
+type SavedPhoto = {
+  id: string;
+  event_id: string;
+  path: string;
+};
+
+type FaceIndexPayload = {
+  photo_id: string;
+  event_id: string;
+  embedding: number[];
+  bbox: { x: number; y: number; width: number; height: number };
+  quality_score: number;
+};
 
 export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   const [showForm, setShowForm] = useState(false);
@@ -45,7 +64,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     return j.url as string;
   }
 
-  async function saveBatch(urls: string[], slug: string) {
+  async function saveBatch(urls: string[], slug: string): Promise<SavedPhoto[]> {
     const token = localStorage.getItem("fmc-auth-token") || "";
     if (!token) throw new Error("Unauthorized. Please log in again.");
     const res = await fetch("/api/admin/photos", {
@@ -58,6 +77,51 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error || "Failed to save photos");
+    return (j.photos || []) as SavedPhoto[];
+  }
+
+  async function indexFaces(faces: FaceIndexPayload[]) {
+    if (!faces.length) return;
+
+    const token = localStorage.getItem("fmc-auth-token") || "";
+    if (!token) throw new Error("Unauthorized. Please log in again.");
+
+    const res = await fetch("/api/admin/faces/index", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ faces }),
+    });
+
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(j.error || "Failed to index faces");
+    }
+  }
+
+  async function refreshFaceClusters() {
+    const token = localStorage.getItem("fmc-auth-token") || "";
+    if (!token) throw new Error("Unauthorized. Please log in again.");
+
+    const res = await fetch("/api/admin/faces/recluster", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        threshold: 0.35,
+        min_quality: 0.45,
+        reset: false,
+      }),
+    });
+
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(j.error || "Failed to refresh people clusters");
+    }
   }
 
   const handleUpload = async () => {
@@ -73,6 +137,16 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     setStatus("Starting uploads...");
     try {
       const pending: string[] = [];
+      let indexedFacesCount = 0;
+      const faceMapByUrl = new Map<string, DetectedFace[]>();
+      let faceModelsReady = false;
+
+      setStatus("Initializing face models...");
+      faceModelsReady = await prepareFaceEmbeddingModels();
+      if (!faceModelsReady) {
+        setStatus("Face indexing unavailable. Uploading photos without face search data...");
+      }
+
       for (let i = 0; i < files.length; i++) {
         setStatus(`Compressing ${i + 1}/${files.length}...`);
         const compressed = await imageCompression(files[i], {
@@ -80,17 +154,75 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
           maxWidthOrHeight: 1920,
           useWebWorker: true,
         });
+
+        let detectedFaces: DetectedFace[] = [];
+        if (faceModelsReady) {
+          try {
+            setStatus(`Detecting faces ${i + 1}/${files.length}...`);
+            detectedFaces = await extractFaceEmbeddings(compressed);
+          } catch (error) {
+            console.warn("Face extraction failed for one image:", error);
+          }
+        }
+
         setStatus(`Uploading ${i + 1}/${files.length}...`);
-        pending.push(await uploadViaApi(compressed));
+        const url = await uploadViaApi(compressed);
+        pending.push(url);
+        if (detectedFaces.length > 0) {
+          faceMapByUrl.set(url, detectedFaces);
+        }
+
         if (pending.length >= SAVE_CHUNK) {
           setStatus(`Saving ${pending.length} photos...`);
-          await saveBatch(pending.splice(0), eventSlug);
+          const saved = await saveBatch(pending.splice(0), eventSlug);
+
+          const facePayload: FaceIndexPayload[] = saved.flatMap((photo) => {
+            const matches = faceMapByUrl.get(photo.path) || [];
+            faceMapByUrl.delete(photo.path);
+            return matches.map((face) => ({
+              photo_id: photo.id,
+              event_id: photo.event_id,
+              embedding: face.embedding,
+              bbox: face.bbox,
+              quality_score: face.quality_score,
+            }));
+          });
+
+          if (facePayload.length > 0) {
+            setStatus(`Indexing ${facePayload.length} face(s)...`);
+            await indexFaces(facePayload);
+            indexedFacesCount += facePayload.length;
+          }
         }
       }
       if (pending.length) {
         setStatus(`Saving ${pending.length} photos...`);
-        await saveBatch(pending.splice(0), eventSlug);
+        const saved = await saveBatch(pending.splice(0), eventSlug);
+
+        const facePayload: FaceIndexPayload[] = saved.flatMap((photo) => {
+          const matches = faceMapByUrl.get(photo.path) || [];
+          faceMapByUrl.delete(photo.path);
+          return matches.map((face) => ({
+            photo_id: photo.id,
+            event_id: photo.event_id,
+            embedding: face.embedding,
+            bbox: face.bbox,
+            quality_score: face.quality_score,
+          }));
+        });
+
+        if (facePayload.length > 0) {
+          setStatus(`Indexing ${facePayload.length} face(s)...`);
+          await indexFaces(facePayload);
+          indexedFacesCount += facePayload.length;
+        }
       }
+
+      if (indexedFacesCount > 0) {
+        setStatus("Refreshing people clusters...");
+        await refreshFaceClusters();
+      }
+
       setStatus(`✓ Added ${files.length} photo(s) to gallery`);
       setFiles([]);
       setTimeout(() => window.location.reload(), 1200);

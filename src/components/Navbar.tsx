@@ -80,6 +80,15 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
                 ABOUT US
               </Link>
             </li>
+
+            <li>
+              <Link
+                href="/people"
+                className="text-white hover:text-[#FFBF00] transition"
+              >
+                PEOPLE
+              </Link>
+            </li>
           </div>
 
           <div className="flex items-center space-x-6">
