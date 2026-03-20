@@ -1,0 +1,171 @@
+import { createClient } from "@supabase/supabase-js";
+
+export async function GET(request: Request) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return Response.json({ error: "Service misconfigured" }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const { searchParams } = new URL(request.url);
+
+    const eventId = searchParams.get("event_id");
+    const limit = Math.max(1, Math.min(300, Number(searchParams.get("limit") || "120")));
+
+    if (eventId) {
+      const { data: eventFaces, error: eventFacesError } = await supabase
+        .from("face_embeddings")
+        .select("cluster_id, photo_id")
+        .eq("event_id", eventId)
+        .not("cluster_id", "is", null);
+
+      if (eventFacesError) {
+        return Response.json({ error: eventFacesError.message }, { status: 500 });
+      }
+
+      const byCluster = new Map<number, { photoIds: Set<string>; faceCount: number }>();
+      for (const row of eventFaces || []) {
+        const clusterId = Number(row.cluster_id);
+        if (!Number.isFinite(clusterId)) continue;
+
+        const current = byCluster.get(clusterId) || { photoIds: new Set<string>(), faceCount: 0 };
+        current.faceCount += 1;
+        if (row.photo_id) current.photoIds.add(String(row.photo_id));
+        byCluster.set(clusterId, current);
+      }
+
+      const clusterIds = Array.from(byCluster.keys());
+      if (!clusterIds.length) {
+        return Response.json({ ok: true, people: [] });
+      }
+
+      const sortedClusterIds = clusterIds.sort((a, b) => {
+        const aCount = byCluster.get(a)?.faceCount || 0;
+        const bCount = byCluster.get(b)?.faceCount || 0;
+        return bCount - aCount;
+      });
+
+      const effectiveClusterIds = sortedClusterIds.slice(0, limit);
+      const { data: clusterRows, error: clusterError } = await supabase
+        .from("face_clusters")
+        .select("id, face_count, cover_photo_id, updated_at")
+        .in("id", effectiveClusterIds);
+
+      if (clusterError) {
+        return Response.json({ error: clusterError.message }, { status: 500 });
+      }
+
+      const coverIds = Array.from(
+        new Set(
+          effectiveClusterIds
+            .flatMap((clusterId) => {
+              const photoId = clusterRows?.find((row) => Number(row.id) === clusterId)?.cover_photo_id;
+              if (photoId) return [String(photoId)];
+
+              const fallback = byCluster.get(clusterId);
+              return fallback?.photoIds ? Array.from(fallback.photoIds).slice(0, 1) : [];
+            })
+            .filter(Boolean)
+        )
+      );
+
+      let photoById = new Map<string, { path: string }>();
+      if (coverIds.length) {
+        const { data: photoRows } = await supabase
+          .from("photos")
+          .select("id, path")
+          .in("id", coverIds);
+
+        photoById = new Map((photoRows || []).map((row) => [String(row.id), { path: row.path || "" }]));
+      }
+
+      const people = effectiveClusterIds.map((clusterId) => {
+        const clusterMeta = clusterRows?.find((row) => Number(row.id) === clusterId);
+        const group = byCluster.get(clusterId);
+        const coverPhotoId = clusterMeta?.cover_photo_id
+          ? String(clusterMeta.cover_photo_id)
+          : Array.from(group?.photoIds || [])[0];
+
+        return {
+          id: clusterId,
+          face_count: group?.faceCount || 0,
+          photo_count: group?.photoIds.size || 0,
+          cover_photo_id: coverPhotoId || null,
+          cover_url: coverPhotoId ? photoById.get(coverPhotoId)?.path || null : null,
+          updated_at: clusterMeta?.updated_at || null,
+        };
+      });
+
+      return Response.json({ ok: true, people });
+    }
+
+    const { data: clusters, error: clusterError } = await supabase
+      .from("face_clusters")
+      .select("id, face_count, cover_photo_id, updated_at")
+      .order("face_count", { ascending: false })
+      .limit(limit);
+
+    if (clusterError) {
+      return Response.json({ error: clusterError.message }, { status: 500 });
+    }
+
+    const clusterIds = (clusters || []).map((row) => Number(row.id)).filter((value) => Number.isFinite(value));
+
+    const { data: groupedFaces, error: groupedFacesError } = await supabase
+      .from("face_embeddings")
+      .select("cluster_id, photo_id, event_id")
+      .in("cluster_id", clusterIds);
+
+    if (groupedFacesError) {
+      return Response.json({ error: groupedFacesError.message }, { status: 500 });
+    }
+
+    const statsByCluster = new Map<number, { photoIds: Set<string>; eventIds: Set<string> }>();
+    for (const row of groupedFaces || []) {
+      const clusterId = Number(row.cluster_id);
+      if (!Number.isFinite(clusterId)) continue;
+
+      const current = statsByCluster.get(clusterId) || { photoIds: new Set<string>(), eventIds: new Set<string>() };
+      if (row.photo_id) current.photoIds.add(String(row.photo_id));
+      if (row.event_id) current.eventIds.add(String(row.event_id));
+      statsByCluster.set(clusterId, current);
+    }
+
+    const coverIds = Array.from(
+      new Set((clusters || []).map((row) => row.cover_photo_id).filter(Boolean).map((id) => String(id)))
+    );
+
+    let coverById = new Map<string, string>();
+    if (coverIds.length) {
+      const { data: coverRows } = await supabase
+        .from("photos")
+        .select("id, path")
+        .in("id", coverIds);
+
+      coverById = new Map((coverRows || []).map((row) => [String(row.id), row.path || ""]));
+    }
+
+    const people = (clusters || []).map((row) => {
+      const clusterId = Number(row.id);
+      const stats = statsByCluster.get(clusterId);
+      const coverPhotoId = row.cover_photo_id ? String(row.cover_photo_id) : null;
+
+      return {
+        id: clusterId,
+        face_count: row.face_count || 0,
+        photo_count: stats?.photoIds.size || 0,
+        event_count: stats?.eventIds.size || 0,
+        cover_photo_id: coverPhotoId,
+        cover_url: coverPhotoId ? coverById.get(coverPhotoId) || null : null,
+        updated_at: row.updated_at || null,
+      };
+    });
+
+    return Response.json({ ok: true, people });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to load people";
+    return Response.json({ error: msg }, { status: 500 });
+  }
+}
