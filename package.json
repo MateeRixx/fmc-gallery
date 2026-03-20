@@ -9,11 +9,12 @@
     "lint": "eslint . --ext .js,.ts,.tsx"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1013.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.87.1",
-    "@tensorflow/tfjs": "1.7.4",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
     "browser-image-compression": "^2.0.2",
-    "face-api.js": "^0.22.2",
     "framer-motion": "^12.23.24",
     "jszip": "^3.10.1",
     "next": "^16.0.10",
