@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import FaceSearchPanel from "@/components/faces/FaceSearchPanel";
 import { getCurrentUser } from "@/lib/jwt";
-import { extractFaceEmbeddings, prepareFaceEmbeddingModels } from "@/lib/faceEmbedding";
 
 type UnprocessedPhoto = {
   id: string;
@@ -184,7 +183,7 @@ export default function AdminFacesPage() {
       const token = localStorage.getItem("fmc-auth-token") || "";
 
       // Fetch photos without face embeddings
-      const listResponse = await fetch("/api/admin/faces/unprocessed?limit=500", {
+      const listResponse = await fetch("/api/admin/faces/unprocessed?limit=500&mode=aws", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -221,16 +220,9 @@ export default function AdminFacesPage() {
       }
 
       setProcessProgress({ current: 0, total: photos.length });
-      setProcessStatus("Initializing face detection models...");
-
-      const modelsReady = await prepareFaceEmbeddingModels();
-      if (!modelsReady) {
-        setProcessStatus("Failed to load face detection models.");
-        return;
-      }
-
-      console.log("Face models loaded successfully");
+      setProcessStatus("Indexing photos with AWS Rekognition...");
       let totalFacesIndexed = 0;
+      let totalFailedIndexing = 0;
 
       for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
@@ -238,49 +230,49 @@ export default function AdminFacesPage() {
         setProcessStatus(`Processing photo ${i + 1}/${photos.length}...`);
 
         try {
-          // Fetch photo as blob
-          const imageResponse = await fetch(photo.path);
-          if (!imageResponse.ok) {
-            console.warn(`Failed to fetch photo ${photo.id}`);
-            continue;
-          }
-
-          const blob = await imageResponse.blob();
-          const file = new File([blob], `photo-${photo.id}.jpg`, { type: blob.type });
-
-          // Extract face embeddings
-          const detectedFaces = await extractFaceEmbeddings(file);
-          if (detectedFaces.length === 0) {
-            continue;
-          }
-
-          // Index faces
-          const facePayload = detectedFaces.map((face) => ({
-            photo_id: photo.id,
-            event_id: photo.event_id,
-            embedding: face.embedding,
-            bbox: face.bbox,
-            quality_score: face.quality_score,
-          }));
-
-          const indexResponse = await fetch("/api/admin/faces/index", {
+          const indexResponse = await fetch("/api/admin/faces/index-aws", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ faces: facePayload }),
+            body: JSON.stringify({
+              photos: [
+                {
+                  photo_id: photo.id,
+                  event_id: photo.event_id,
+                  image_url: photo.path,
+                },
+              ],
+            }),
           });
 
           if (indexResponse.ok) {
-            totalFacesIndexed += detectedFaces.length;
+            const indexData = await indexResponse.json();
+            totalFacesIndexed += Number(indexData.indexed_faces || 0);
+            totalFailedIndexing += Number(indexData.failed_photos || 0);
+            if (Number(indexData.failed_photos || 0) > 0) {
+              const firstFailure = Array.isArray(indexData.failures) ? indexData.failures[0] : null;
+              console.warn("AWS indexing photo failures:", indexData.failures || []);
+              if (firstFailure?.error) {
+                setProcessStatus(
+                  `Indexing warning: ${firstFailure.error} (continuing...)`
+                );
+              }
+            }
+          } else {
+            const indexData = await indexResponse.json().catch(() => ({}));
+            console.warn("AWS indexing failed for photo", photo.id, indexData.error || indexData);
+            totalFailedIndexing += 1;
           }
         } catch (error) {
           console.error(`Failed to process photo ${photo.id}:`, error);
         }
       }
 
-      setProcessStatus(`Indexed ${totalFacesIndexed} faces. Running reclustering...`);
+      setProcessStatus(
+        `Indexed ${totalFacesIndexed} faces (${totalFailedIndexing} photo failures). Running AWS reclustering...`
+      );
 
       // Run reclustering - use reset: true to rebuild all clusters from scratch
       const reclusterResponse = await fetch("/api/admin/faces/recluster", {
@@ -292,6 +284,7 @@ export default function AdminFacesPage() {
         body: JSON.stringify({
           threshold,
           min_quality: minQuality,
+          method: "aws",
           reset: true,  // Force full reclustering
         }),
       });
@@ -299,11 +292,13 @@ export default function AdminFacesPage() {
       const reclusterData = await reclusterResponse.json();
       if (reclusterResponse.ok) {
         setProcessStatus(
-          `✓ Complete! Indexed ${totalFacesIndexed} faces, created ${reclusterData.created_clusters} new clusters.`
+          `✓ Complete! Indexed ${totalFacesIndexed} faces, created ${reclusterData.created_clusters} new clusters (${totalFailedIndexing} photo failures).`
         );
         loadStats(); // Refresh stats
       } else {
-        setProcessStatus(`Indexed ${totalFacesIndexed} faces but reclustering failed.`);
+        setProcessStatus(
+          `Indexed ${totalFacesIndexed} faces but reclustering failed: ${reclusterData.error || "Unknown error"}`
+        );
       }
     } catch (error) {
       console.error("Processing failed:", error);

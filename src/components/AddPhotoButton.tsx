@@ -5,11 +5,6 @@ import { useState } from "react";
 import imageCompression from "browser-image-compression";
 import { getCurrentUser } from "@/lib/jwt";
 import { Permission, UserRole } from "@/types";
-import {
-  extractFaceEmbeddings,
-  prepareFaceEmbeddingModels,
-  type DetectedFace,
-} from "@/lib/faceEmbedding";
 
 const SAVE_CHUNK = 25;
 
@@ -17,14 +12,6 @@ type SavedPhoto = {
   id: string;
   event_id: string;
   path: string;
-};
-
-type FaceIndexPayload = {
-  photo_id: string;
-  event_id: string;
-  embedding: number[];
-  bbox: { x: number; y: number; width: number; height: number };
-  quality_score: number;
 };
 
 export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
@@ -80,25 +67,36 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     return (j.photos || []) as SavedPhoto[];
   }
 
-  async function indexFaces(faces: FaceIndexPayload[]) {
-    if (!faces.length) return;
+  async function indexFacesAws(photos: SavedPhoto[]) {
+    if (!photos.length) return { indexedFaces: 0, failedPhotos: 0 };
 
     const token = localStorage.getItem("fmc-auth-token") || "";
     if (!token) throw new Error("Unauthorized. Please log in again.");
 
-    const res = await fetch("/api/admin/faces/index", {
+    const res = await fetch("/api/admin/faces/index-aws", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ faces }),
+      body: JSON.stringify({
+        photos: photos.map((photo) => ({
+          photo_id: photo.id,
+          event_id: photo.event_id,
+          image_url: photo.path,
+        })),
+      }),
     });
 
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(j.error || "Failed to index faces");
     }
+
+    return {
+      indexedFaces: Number(j.indexed_faces || 0),
+      failedPhotos: Number(j.failed_photos || 0),
+    };
   }
 
   async function refreshFaceClusters() {
@@ -114,6 +112,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
       body: JSON.stringify({
         threshold: 0.35,
         min_quality: 0.45,
+        method: "aws",
         reset: false,
       }),
     });
@@ -138,14 +137,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     try {
       const pending: string[] = [];
       let indexedFacesCount = 0;
-      const faceMapByUrl = new Map<string, DetectedFace[]>();
-      let faceModelsReady = false;
-
-      setStatus("Initializing face models...");
-      faceModelsReady = await prepareFaceEmbeddingModels();
-      if (!faceModelsReady) {
-        setStatus("Face indexing unavailable. Uploading photos without face search data...");
-      }
+      let indexingFailedPhotos = 0;
 
       for (let i = 0; i < files.length; i++) {
         setStatus(`Compressing ${i + 1}/${files.length}...`);
@@ -155,75 +147,37 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
           useWebWorker: true,
         });
 
-        let detectedFaces: DetectedFace[] = [];
-        if (faceModelsReady) {
-          try {
-            setStatus(`Detecting faces ${i + 1}/${files.length}...`);
-            detectedFaces = await extractFaceEmbeddings(compressed);
-          } catch (error) {
-            console.warn("Face extraction failed for one image:", error);
-          }
-        }
-
         setStatus(`Uploading ${i + 1}/${files.length}...`);
         const url = await uploadViaApi(compressed);
         pending.push(url);
-        if (detectedFaces.length > 0) {
-          faceMapByUrl.set(url, detectedFaces);
-        }
 
         if (pending.length >= SAVE_CHUNK) {
           setStatus(`Saving ${pending.length} photos...`);
           const saved = await saveBatch(pending.splice(0), eventSlug);
-
-          const facePayload: FaceIndexPayload[] = saved.flatMap((photo) => {
-            const matches = faceMapByUrl.get(photo.path) || [];
-            faceMapByUrl.delete(photo.path);
-            return matches.map((face) => ({
-              photo_id: photo.id,
-              event_id: photo.event_id,
-              embedding: face.embedding,
-              bbox: face.bbox,
-              quality_score: face.quality_score,
-            }));
-          });
-
-          if (facePayload.length > 0) {
-            setStatus(`Indexing ${facePayload.length} face(s)...`);
-            await indexFaces(facePayload);
-            indexedFacesCount += facePayload.length;
-          }
+          setStatus(`AWS indexing ${saved.length} photo(s)...`);
+          const indexStats = await indexFacesAws(saved);
+          indexedFacesCount += indexStats.indexedFaces;
+          indexingFailedPhotos += indexStats.failedPhotos;
         }
       }
       if (pending.length) {
         setStatus(`Saving ${pending.length} photos...`);
         const saved = await saveBatch(pending.splice(0), eventSlug);
 
-        const facePayload: FaceIndexPayload[] = saved.flatMap((photo) => {
-          const matches = faceMapByUrl.get(photo.path) || [];
-          faceMapByUrl.delete(photo.path);
-          return matches.map((face) => ({
-            photo_id: photo.id,
-            event_id: photo.event_id,
-            embedding: face.embedding,
-            bbox: face.bbox,
-            quality_score: face.quality_score,
-          }));
-        });
-
-        if (facePayload.length > 0) {
-          setStatus(`Indexing ${facePayload.length} face(s)...`);
-          await indexFaces(facePayload);
-          indexedFacesCount += facePayload.length;
-        }
+        setStatus(`AWS indexing ${saved.length} photo(s)...`);
+        const indexStats = await indexFacesAws(saved);
+        indexedFacesCount += indexStats.indexedFaces;
+        indexingFailedPhotos += indexStats.failedPhotos;
       }
 
-      if (indexedFacesCount > 0) {
+      if (indexedFacesCount > 0 || indexingFailedPhotos === 0) {
         setStatus("Refreshing people clusters...");
         await refreshFaceClusters();
       }
 
-      setStatus(`✓ Added ${files.length} photo(s) to gallery`);
+      setStatus(
+        `✓ Added ${files.length} photo(s). AWS indexed ${indexedFacesCount} face(s) with ${indexingFailedPhotos} photo indexing failures.`
+      );
       setFiles([]);
       setTimeout(() => window.location.reload(), 1200);
     } catch (err: unknown) {

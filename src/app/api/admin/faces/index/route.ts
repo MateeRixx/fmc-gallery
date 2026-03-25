@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       embedding: `[${face.embedding.join(",")}]`,
       bbox: face.bbox,
       quality_score: face.quality_score ?? 0,
+      detection_method: "client",
     }));
 
     const { error } = await supabase.from("face_embeddings").insert(rows);

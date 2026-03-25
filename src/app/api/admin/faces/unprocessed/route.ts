@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Number(searchParams.get("limit") || "100"), 500);
+    const mode = (searchParams.get("mode") || "any").toLowerCase();
 
     // Find all photos first (remove problematic .not() filters)
     const { data: allPhotos, error: photosError } = await supabase
@@ -46,11 +47,19 @@ export async function GET(request: NextRequest) {
     // Keep IDs as strings to avoid NaN issues with BigInt
     const photoIds = validPhotos.map((p) => String(p.id));
 
-    // Get photos that already have embeddings
-    const { data: processedPhotos, error: embeddingsError } = await supabase
+    // Get photos that are already processed.
+    // mode=aws => any row with aws_face_id means processed.
+    // mode=any => any face_embeddings row means processed.
+    let processedQuery = supabase
       .from("face_embeddings")
       .select("photo_id")
       .in("photo_id", photoIds);
+
+    if (mode === "aws") {
+      processedQuery = processedQuery.not("aws_face_id", "is", null);
+    }
+
+    const { data: processedPhotos, error: embeddingsError } = await processedQuery;
 
     if (embeddingsError) {
       console.error("Embeddings query error:", embeddingsError);
@@ -76,6 +85,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({
       ok: true,
+      mode,
       photos: unprocessedPhotos,
       total_unprocessed: unprocessedPhotos.length,
     });
