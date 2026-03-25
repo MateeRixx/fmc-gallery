@@ -68,7 +68,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   }
 
   async function indexFacesAws(photos: SavedPhoto[]) {
-    if (!photos.length) return { indexedFaces: 0, failedPhotos: 0 };
+    if (!photos.length) return { indexedFaces: 0, failedPhotos: 0, newFaceIds: [] };
 
     const token = localStorage.getItem("fmc-auth-token") || "";
     if (!token) throw new Error("Unauthorized. Please log in again.");
@@ -96,10 +96,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
     return {
       indexedFaces: Number(j.indexed_faces || 0),
       failedPhotos: Number(j.failed_photos || 0),
+      newFaceIds: (j.new_face_ids || []) as number[],
     };
   }
 
-  async function refreshFaceClusters() {
+  async function mergeNewFacesIncremental(newFaceIds: number[]) {
+    if (newFaceIds.length === 0) return { mergedCount: 0 };
+
     const token = localStorage.getItem("fmc-auth-token") || "";
     if (!token) throw new Error("Unauthorized. Please log in again.");
 
@@ -110,6 +113,37 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
+        mode: "incremental",
+        new_face_ids: newFaceIds,
+        threshold: 0.35,
+        min_quality: 0.45,
+        method: "aws",
+      }),
+    });
+
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(j.error || "Failed to merge new faces");
+    }
+
+    return {
+      mergedCount: Number(j.merged_faces || 0),
+      unmatchedCount: Number(j.unmatched_faces || 0),
+    };
+  }
+
+  async function fullRecluster() {
+    const token = localStorage.getItem("fmc-auth-token") || "";
+    if (!token) throw new Error("Unauthorized. Please log in again.");
+
+    const res = await fetch("/api/admin/faces/recluster", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        mode: "full",
         threshold: 0.35,
         min_quality: 0.45,
         method: "aws",
@@ -138,6 +172,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
       const pending: string[] = [];
       let indexedFacesCount = 0;
       let indexingFailedPhotos = 0;
+      const allNewFaceIds: number[] = [];
 
       for (let i = 0; i < files.length; i++) {
         setStatus(`Compressing ${i + 1}/${files.length}...`);
@@ -158,6 +193,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
           const indexStats = await indexFacesAws(saved);
           indexedFacesCount += indexStats.indexedFaces;
           indexingFailedPhotos += indexStats.failedPhotos;
+          allNewFaceIds.push(...indexStats.newFaceIds);
         }
       }
       if (pending.length) {
@@ -168,11 +204,18 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
         const indexStats = await indexFacesAws(saved);
         indexedFacesCount += indexStats.indexedFaces;
         indexingFailedPhotos += indexStats.failedPhotos;
+        allNewFaceIds.push(...indexStats.newFaceIds);
       }
 
-      if (indexedFacesCount > 0 || indexingFailedPhotos === 0) {
-        setStatus("Refreshing people clusters...");
-        await refreshFaceClusters();
+      // Use incremental merge for new faces, full recluster only if >50 photos
+      if (allNewFaceIds.length > 0) {
+        if (files.length >= 50) {
+          setStatus("Running full recluster (large batch)...");
+          await fullRecluster();
+        } else {
+          setStatus(`Merging ${allNewFaceIds.length} new face(s) into clusters...`);
+          await mergeNewFacesIncremental(allNewFaceIds);
+        }
       }
 
       setStatus(
@@ -181,7 +224,15 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
       setFiles([]);
       setTimeout(() => window.location.reload(), 1200);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err ?? "Unknown error");
+      console.error("Upload error:", err);
+      let msg = "Unknown error";
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === "string") {
+        msg = err;
+      } else if (err && typeof err === "object") {
+        msg = JSON.stringify(err);
+      }
       setStatus(`✗ Error: ${msg}`);
     } finally {
       setBusy(false);
