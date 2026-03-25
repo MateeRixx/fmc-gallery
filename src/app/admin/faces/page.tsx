@@ -252,11 +252,22 @@ export default function AdminFacesPage() {
             totalFacesIndexed += Number(indexData.indexed_faces || 0);
             totalFailedIndexing += Number(indexData.failed_photos || 0);
             if (Number(indexData.failed_photos || 0) > 0) {
-              const firstFailure = Array.isArray(indexData.failures) ? indexData.failures[0] : null;
-              console.warn("AWS indexing photo failures:", indexData.failures || []);
+              const failures = indexData.failures || [];
+              console.warn(`AWS indexing photo failures (${failures.length}):`, failures);
+
+              // Group failures by error type for better debugging
+              const errorTypes = failures.reduce((acc: Record<string, number>, f: any) => {
+                const errorKey = f.error || 'Unknown error';
+                acc[errorKey] = (acc[errorKey] || 0) + 1;
+                return acc;
+              }, {});
+
+              console.log('Failure breakdown:', errorTypes);
+
+              const firstFailure = failures[0];
               if (firstFailure?.error) {
                 setProcessStatus(
-                  `Indexing warning: ${firstFailure.error} (continuing...)`
+                  `Indexing warning: ${firstFailure.error} (${failures.length} photo(s) affected, continuing...)`
                 );
               }
             }
