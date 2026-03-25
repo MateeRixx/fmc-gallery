@@ -191,11 +191,13 @@ async function runAwsClusteringGlobal(params: {
   // Write clusters to database
   let createdClusters = 0;
   const clustersNeedingAudit: number[] = [];
+  const createdClusterIds: number[] = [];
 
   for (const [root, members] of Array.from(membersByRoot.entries())) {
     const faceCount = members.length;
-    const coverPhotoIdRaw = Number(members[0]?.photo_id);
-    const coverPhotoId = Number.isFinite(coverPhotoIdRaw) ? coverPhotoIdRaw : null;
+    // photo_id is a UUID string, not a number
+    const coverPhotoId = members[0]?.photo_id || null;
+    const coverFaceId = members[0]?.id || null; // Store the face ID for cropped thumbnail
 
     // Use first valid embedding or zero vector fallback
     const centroidVector =
@@ -208,6 +210,7 @@ async function runAwsClusteringGlobal(params: {
         canonical_embedding: vectorToPgString(centroidVector),
         face_count: faceCount,
         cover_photo_id: coverPhotoId,
+        cover_face_id: coverFaceId,
         member_count: faceCount,
       })
       .select("id")
@@ -218,6 +221,7 @@ async function runAwsClusteringGlobal(params: {
     }
 
     const clusterId = Number(clusterRow.id);
+    createdClusterIds.push(clusterId);
 
     const { error: assignError } = await supabase
       .from("face_embeddings")
@@ -239,17 +243,321 @@ async function runAwsClusteringGlobal(params: {
     }
   }
 
+  // PASS 3: Merge duplicate clusters (same person in multiple clusters)
+  onProgress?.(`Pass 3: Checking for duplicate clusters...`);
+  const mergeResult = await mergeDuplicateClusters({
+    supabase,
+    clusterIds: createdClusterIds,
+    threshold,
+  });
+
   return {
     ok: true,
     processed_faces: usableRows.length,
     skipped_faces: skippedFaces,
     created_clusters: createdClusters,
-    total_clusters: createdClusters,
+    total_clusters: createdClusters - (mergeResult.merged_clusters || 0),
     search_errors: searchErrors,
     clusters_needing_audit: clustersNeedingAudit,
+    merged_duplicates: mergeResult.merged_clusters || 0,
     debug: { distanceLogs, edges: edges.length },
     method: "aws-global",
   };
+}
+
+// ============================================================================
+// Merge Duplicate Clusters (Post-Processing)
+// ============================================================================
+
+async function mergeDuplicateClusters(params: {
+  supabase: any;
+  clusterIds: number[];
+  threshold: number;
+}) {
+  const { supabase, clusterIds, threshold } = params;
+
+  if (clusterIds.length < 2) {
+    return { merged_clusters: 0 };
+  }
+
+  console.log(`[PASS 3] Checking ${clusterIds.length} clusters for duplicates...`);
+
+  // Get multiple representative faces from each cluster (top 3 quality faces per cluster)
+  const { data: representativeFaces } = await supabase
+    .from("face_embeddings")
+    .select("id, cluster_id, aws_face_id, quality_score, embedding")
+    .in("cluster_id", clusterIds)
+    .not("aws_face_id", "is", null)
+    .order("quality_score", { ascending: false });
+
+  if (!representativeFaces || representativeFaces.length < 2) {
+    console.log("[PASS 3] No representative faces found");
+    return { merged_clusters: 0 };
+  }
+
+  // Get top 3 faces per cluster for better duplicate detection
+  const facesByCluster = new Map<number, Array<{ id: number; aws_face_id: string; embedding: number[] }>>();
+  for (const face of representativeFaces) {
+    const clusterId = Number(face.cluster_id);
+    if (!facesByCluster.has(clusterId)) {
+      facesByCluster.set(clusterId, []);
+    }
+    const clusterFaces = facesByCluster.get(clusterId)!;
+    if (clusterFaces.length < 3) { // Use top 3 faces per cluster
+      clusterFaces.push({
+        id: Number(face.id),
+        aws_face_id: String(face.aws_face_id),
+        embedding: parsePgVector(face.embedding),
+      });
+    }
+  }
+
+  // Use more lenient threshold for duplicate detection (15% more lenient than clustering threshold)
+  const duplicateThreshold = Math.max(threshold - 0.15, 0.1);
+  const similarityThreshold = Math.max(1, Math.min(99, (1 - duplicateThreshold) * 100));
+
+  console.log(`[PASS 3] Using duplicate threshold: ${duplicateThreshold}, AWS similarity: ${similarityThreshold}%`);
+
+  const clusterUnion = new UnionFind(clusterIds.length);
+  const clusterIndexMap = new Map<number, number>();
+  clusterIds.forEach((id, index) => clusterIndexMap.set(id, index));
+
+  let totalMatches = 0;
+
+  // Check each cluster against others using multiple methods
+  for (let i = 0; i < clusterIds.length; i++) {
+    const clusterIdA = clusterIds[i];
+    const facesA = facesByCluster.get(clusterIdA);
+    if (!facesA || facesA.length === 0) continue;
+
+    for (let j = i + 1; j < clusterIds.length; j++) {
+      const clusterIdB = clusterIds[j];
+      const facesB = facesByCluster.get(clusterIdB);
+      if (!facesB || facesB.length === 0) continue;
+
+      let foundMatch = false;
+
+      // Method 1: AWS Face Search (more accurate but can miss some matches)
+      for (const faceA of facesA) {
+        if (foundMatch) break;
+
+        try {
+          const matches = await searchFacesByFaceId({
+            awsFaceId: faceA.aws_face_id,
+            similarityThreshold,
+            maxFaces: 50,
+          });
+
+          const matchedFaceIds = new Set(matches.map(m => m.awsFaceId));
+
+          for (const faceB of facesB) {
+            if (matchedFaceIds.has(faceB.aws_face_id)) {
+              console.log(`[PASS 3] AWS match found: cluster ${clusterIdA} <-> ${clusterIdB}`);
+              const indexA = clusterIndexMap.get(clusterIdA)!;
+              const indexB = clusterIndexMap.get(clusterIdB)!;
+              clusterUnion.union(indexA, indexB);
+              foundMatch = true;
+              totalMatches++;
+              break;
+            }
+          }
+        } catch (error) {
+          console.error(`[PASS 3] AWS search failed for face ${faceA.id}:`, error);
+        }
+      }
+
+      // Method 2: Direct embedding similarity (fallback for AWS search failures)
+      if (!foundMatch) {
+        for (const faceA of facesA) {
+          if (foundMatch) break;
+
+          for (const faceB of facesB) {
+            if (faceA.embedding.length === 128 && faceB.embedding.length === 128) {
+              const distance = cosineDistance(faceA.embedding, faceB.embedding);
+              if (distance <= duplicateThreshold) {
+                console.log(`[PASS 3] Embedding match found: cluster ${clusterIdA} <-> ${clusterIdB} (distance: ${distance.toFixed(4)})`);
+                const indexA = clusterIndexMap.get(clusterIdA)!;
+                const indexB = clusterIndexMap.get(clusterIdB)!;
+                clusterUnion.union(indexA, indexB);
+                foundMatch = true;
+                totalMatches++;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  console.log(`[PASS 3] Found ${totalMatches} cross-cluster matches`);
+
+  // Group clusters that should be merged
+  const clusterGroupsByRoot = new Map<number, number[]>();
+  for (let i = 0; i < clusterIds.length; i++) {
+    const root = clusterUnion.find(i);
+    if (!clusterGroupsByRoot.has(root)) {
+      clusterGroupsByRoot.set(root, []);
+    }
+    clusterGroupsByRoot.get(root)!.push(clusterIds[i]);
+  }
+
+  let mergedCount = 0;
+  console.log(`[PASS 3] Found ${clusterGroupsByRoot.size} cluster groups`);
+
+  // Merge each group
+  for (const clusterGroup of clusterGroupsByRoot.values()) {
+    if (clusterGroup.length < 2) continue; // No merge needed
+
+    console.log(`[PASS 3] Merging cluster group: [${clusterGroup.join(', ')}]`);
+
+    // Get cluster info to determine which to keep
+    const { data: clusterInfo } = await supabase
+      .from("face_clusters")
+      .select("id, member_count")
+      .in("id", clusterGroup);
+
+    if (!clusterInfo || clusterInfo.length < 2) continue;
+
+    // Keep the largest cluster, merge others into it
+    const sorted = clusterInfo.sort((a: any, b: any) => (b.member_count || 0) - (a.member_count || 0));
+    const keepClusterId = sorted[0].id;
+    const toMerge = sorted.slice(1);
+
+    let totalMovedFaces = 0;
+    for (const clusterToMerge of toMerge) {
+      // Move all faces to the kept cluster
+      const { error: moveError } = await supabase
+        .from("face_embeddings")
+        .update({ cluster_id: keepClusterId })
+        .eq("cluster_id", clusterToMerge.id);
+
+      if (moveError) {
+        console.error(`[PASS 3] Failed to move faces from cluster ${clusterToMerge.id}:`, moveError);
+        continue;
+      }
+
+      totalMovedFaces += clusterToMerge.member_count || 0;
+
+      // Delete merged cluster
+      await supabase
+        .from("face_clusters")
+        .delete()
+        .eq("id", clusterToMerge.id);
+
+      console.log(`[PASS 3] Merged duplicate cluster ${clusterToMerge.id} -> ${keepClusterId} (${clusterToMerge.member_count} faces)`);
+      mergedCount++;
+    }
+
+    // Update member count of kept cluster
+    if (totalMovedFaces > 0) {
+      const newMemberCount = sorted[0].member_count + totalMovedFaces;
+      await supabase
+        .from("face_clusters")
+        .update({
+          member_count: newMemberCount,
+          face_count: newMemberCount,
+        })
+        .eq("id", keepClusterId);
+    }
+  }
+
+  console.log(`[PASS 3] Successfully merged ${mergedCount} duplicate clusters`);
+  return { merged_clusters: mergedCount };
+}
+
+async function detectAndMergeOverlappingClusters(params: {
+  supabase: any;
+  clusterIds: number[];
+  threshold: number;
+}) {
+  const { supabase, clusterIds, threshold } = params;
+
+  if (clusterIds.length < 2) return;
+
+  // Get sample faces from each cluster
+  const { data: clusterFaces } = await supabase
+    .from("face_embeddings")
+    .select("id, cluster_id, aws_face_id")
+    .in("cluster_id", clusterIds)
+    .not("aws_face_id", "is", null)
+    .limit(200);
+
+  if (!clusterFaces || clusterFaces.length < 2) return;
+
+  const facesByCluster = new Map<number, string[]>();
+  for (const face of clusterFaces) {
+    const clusterId = Number(face.cluster_id);
+    if (!facesByCluster.has(clusterId)) {
+      facesByCluster.set(clusterId, []);
+    }
+    facesByCluster.get(clusterId)!.push(face.aws_face_id);
+  }
+
+  const similarityThreshold = Math.max(1, Math.min(99, (1 - threshold) * 100));
+  const clusterPairsToMerge: [number, number][] = [];
+
+  // Check each pair of clusters
+  const clusterArray = Array.from(facesByCluster.keys());
+  for (let i = 0; i < clusterArray.length; i++) {
+    for (let j = i + 1; j < clusterArray.length; j++) {
+      const clusterA = clusterArray[i];
+      const clusterB = clusterArray[j];
+      const facesA = facesByCluster.get(clusterA)!;
+      const facesB = facesByCluster.get(clusterB)!;
+
+      // Sample one face from cluster A and check against cluster B
+      try {
+        const matches = await searchFacesByFaceId({
+          awsFaceId: facesA[0],
+          similarityThreshold,
+          maxFaces: 50,
+        });
+
+        const matchesInB = matches.filter((m) => facesB.includes(m.awsFaceId));
+
+        // If significant overlap (>20% of smaller cluster), merge
+        const overlapRatio = matchesInB.length / Math.min(facesA.length, facesB.length);
+        if (overlapRatio > 0.2) {
+          clusterPairsToMerge.push([clusterA, clusterB]);
+        }
+      } catch (error) {
+        console.error(`Failed to check overlap between clusters ${clusterA} and ${clusterB}:`, error);
+      }
+    }
+  }
+
+  // Merge clusters
+  for (const [clusterA, clusterB] of clusterPairsToMerge) {
+    const { data: clusterInfo } = await supabase
+      .from("face_clusters")
+      .select("id, member_count")
+      .in("id", [clusterA, clusterB]);
+
+    if (!clusterInfo || clusterInfo.length !== 2) continue;
+
+    const [larger, smaller] =
+      clusterInfo[0].member_count >= clusterInfo[1].member_count
+        ? [clusterInfo[0], clusterInfo[1]]
+        : [clusterInfo[1], clusterInfo[0]];
+
+    // Move all faces from smaller to larger cluster
+    await supabase
+      .from("face_embeddings")
+      .update({ cluster_id: larger.id })
+      .eq("cluster_id", smaller.id);
+
+    // Update member count
+    await supabase
+      .from("face_clusters")
+      .update({ member_count: larger.member_count + smaller.member_count })
+      .eq("id", larger.id);
+
+    // Delete smaller cluster
+    await supabase.from("face_clusters").delete().eq("id", smaller.id);
+
+    console.log(`Merged cluster ${smaller.id} into cluster ${larger.id}`);
+  }
 }
 
 // ============================================================================
@@ -412,100 +720,6 @@ export async function mergeNewFacesIntoExistingClusters(params: {
   };
 }
 
-async function detectAndMergeOverlappingClusters(params: {
-  supabase: any;
-  clusterIds: number[];
-  threshold: number;
-}) {
-  const { supabase, clusterIds, threshold } = params;
-
-  if (clusterIds.length < 2) return;
-
-  // Get sample faces from each cluster
-  const { data: clusterFaces } = await supabase
-    .from("face_embeddings")
-    .select("id, cluster_id, aws_face_id")
-    .in("cluster_id", clusterIds)
-    .not("aws_face_id", "is", null)
-    .limit(200);
-
-  if (!clusterFaces || clusterFaces.length < 2) return;
-
-  const facesByCluster = new Map<number, string[]>();
-  for (const face of clusterFaces) {
-    const clusterId = Number(face.cluster_id);
-    if (!facesByCluster.has(clusterId)) {
-      facesByCluster.set(clusterId, []);
-    }
-    facesByCluster.get(clusterId)!.push(face.aws_face_id);
-  }
-
-  const similarityThreshold = Math.max(1, Math.min(99, (1 - threshold) * 100));
-  const clusterPairsToMerge: [number, number][] = [];
-
-  // Check each pair of clusters
-  const clusterArray = Array.from(facesByCluster.keys());
-  for (let i = 0; i < clusterArray.length; i++) {
-    for (let j = i + 1; j < clusterArray.length; j++) {
-      const clusterA = clusterArray[i];
-      const clusterB = clusterArray[j];
-      const facesA = facesByCluster.get(clusterA)!;
-      const facesB = facesByCluster.get(clusterB)!;
-
-      // Sample one face from cluster A and check against cluster B
-      try {
-        const matches = await searchFacesByFaceId({
-          awsFaceId: facesA[0],
-          similarityThreshold,
-          maxFaces: 50,
-        });
-
-        const matchesInB = matches.filter((m) => facesB.includes(m.awsFaceId));
-
-        // If significant overlap (>20% of smaller cluster), merge
-        const overlapRatio = matchesInB.length / Math.min(facesA.length, facesB.length);
-        if (overlapRatio > 0.2) {
-          clusterPairsToMerge.push([clusterA, clusterB]);
-        }
-      } catch (error) {
-        console.error(`Failed to check overlap between clusters ${clusterA} and ${clusterB}:`, error);
-      }
-    }
-  }
-
-  // Merge clusters
-  for (const [clusterA, clusterB] of clusterPairsToMerge) {
-    const { data: clusterInfo } = await supabase
-      .from("face_clusters")
-      .select("id, member_count")
-      .in("id", [clusterA, clusterB]);
-
-    if (!clusterInfo || clusterInfo.length !== 2) continue;
-
-    const [larger, smaller] =
-      clusterInfo[0].member_count >= clusterInfo[1].member_count
-        ? [clusterInfo[0], clusterInfo[1]]
-        : [clusterInfo[1], clusterInfo[0]];
-
-    // Move all faces from smaller to larger cluster
-    await supabase
-      .from("face_embeddings")
-      .update({ cluster_id: larger.id })
-      .eq("cluster_id", smaller.id);
-
-    // Update member count
-    await supabase
-      .from("face_clusters")
-      .update({ member_count: larger.member_count + smaller.member_count })
-      .eq("id", larger.id);
-
-    // Delete smaller cluster
-    await supabase.from("face_clusters").delete().eq("id", smaller.id);
-
-    console.log(`Merged cluster ${smaller.id} into cluster ${larger.id}`);
-  }
-}
-
 // ============================================================================
 // PART 3: Cluster Quality Auditing
 // ============================================================================
@@ -521,7 +735,7 @@ export async function auditClusterQuality(params: {
   // Fetch all faces in this cluster
   const { data: clusterFaces, error: fetchError } = await supabase
     .from("face_embeddings")
-    .select("id, aws_face_id, quality_score, embedding")
+    .select("id, photo_id, aws_face_id, quality_score, embedding")
     .eq("cluster_id", clusterId)
     .not("aws_face_id", "is", null);
 
@@ -606,6 +820,7 @@ async function splitCluster(params: {
   const usableFaces = faces
     .map((f: any) => ({
       id: Number(f.id),
+      photo_id: String(f.photo_id || ""),
       aws_face_id: String(f.aws_face_id),
       embedding: parsePgVector(f.embedding),
     }))
@@ -662,7 +877,7 @@ async function splitCluster(params: {
   if (membersByRoot.size > 1) {
     for (const members of Array.from(membersByRoot.values())) {
       const centroidVector = members[0]?.embedding || new Array(128).fill(0);
-      const coverPhotoId = null;
+      const coverPhotoId = members[0]?.photo_id || null;
 
       const { data: newCluster } = await supabase
         .from("face_clusters")

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import FaceThumbnail from "@/components/faces/FaceThumbnail";
 
 type PersonCard = {
   id: number;
@@ -10,6 +11,7 @@ type PersonCard = {
   photo_count: number;
   event_count?: number;
   cover_url: string | null;
+  cover_face_bbox?: { x: number; y: number; width: number; height: number } | null;
 };
 
 export default function PeoplePage() {
@@ -94,17 +96,12 @@ export default function PeoplePage() {
                   className="group relative rounded-2xl overflow-hidden border border-white/10 hover:border-[#FFBF00] transition"
                 >
                   <div className="aspect-square bg-gradient-to-br from-white/10 to-white/5">
-                    {person.cover_url ? (
-                      <img
-                        src={person.cover_url}
-                        alt={`Person ${person.id}`}
-                        className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-4xl opacity-20">👤</div>
-                      </div>
-                    )}
+                    <FaceThumbnail
+                      photoUrl={person.cover_url || ""}
+                      bbox={person.cover_face_bbox}
+                      alt={`Person ${person.id}`}
+                      className="group-hover:scale-110 transition duration-300"
+                    />
                   </div>
 
                   {/* Hover overlay with info */}

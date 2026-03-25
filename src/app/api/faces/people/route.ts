@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       const effectiveClusterIds = sortedClusterIds.slice(0, limit);
       const { data: clusterRows, error: clusterError } = await supabase
         .from("face_clusters")
-        .select("id, face_count, cover_photo_id, updated_at")
+        .select("id, face_count, cover_photo_id, cover_face_id, updated_at")
         .in("id", effectiveClusterIds);
 
       if (clusterError) {
@@ -71,7 +71,18 @@ export async function GET(request: Request) {
         )
       );
 
+      const coverFaceIds = Array.from(
+        new Set(
+          (clusterRows || [])
+            .map((row) => row.cover_face_id)
+            .filter(Boolean)
+            .map((id) => Number(id))
+        )
+      );
+
       let photoById = new Map<string, { path: string }>();
+      let faceBboxById = new Map<number, any>();
+
       if (coverIds.length) {
         const { data: photoRows } = await supabase
           .from("photos")
@@ -81,12 +92,22 @@ export async function GET(request: Request) {
         photoById = new Map((photoRows || []).map((row) => [String(row.id), { path: row.path || "" }]));
       }
 
+      if (coverFaceIds.length) {
+        const { data: faceRows } = await supabase
+          .from("face_embeddings")
+          .select("id, bbox")
+          .in("id", coverFaceIds);
+
+        faceBboxById = new Map((faceRows || []).map((row) => [Number(row.id), row.bbox]));
+      }
+
       const people = effectiveClusterIds.map((clusterId) => {
         const clusterMeta = clusterRows?.find((row) => Number(row.id) === clusterId);
         const group = byCluster.get(clusterId);
         const coverPhotoId = clusterMeta?.cover_photo_id
           ? String(clusterMeta.cover_photo_id)
           : Array.from(group?.photoIds || [])[0];
+        const coverFaceId = clusterMeta?.cover_face_id ? Number(clusterMeta.cover_face_id) : null;
 
         return {
           id: clusterId,
@@ -94,6 +115,7 @@ export async function GET(request: Request) {
           photo_count: group?.photoIds.size || 0,
           cover_photo_id: coverPhotoId || null,
           cover_url: coverPhotoId ? photoById.get(coverPhotoId)?.path || null : null,
+          cover_face_bbox: coverFaceId ? faceBboxById.get(coverFaceId) || null : null,
           updated_at: clusterMeta?.updated_at || null,
         };
       });
@@ -103,7 +125,7 @@ export async function GET(request: Request) {
 
     const { data: clusters, error: clusterError } = await supabase
       .from("face_clusters")
-      .select("id, face_count, cover_photo_id, updated_at")
+      .select("id, face_count, cover_photo_id, cover_face_id, updated_at")
       .order("face_count", { ascending: false })
       .limit(limit);
 
@@ -137,7 +159,13 @@ export async function GET(request: Request) {
       new Set((clusters || []).map((row) => row.cover_photo_id).filter(Boolean).map((id) => String(id)))
     );
 
+    const coverFaceIds = Array.from(
+      new Set((clusters || []).map((row) => row.cover_face_id).filter(Boolean).map((id) => Number(id)))
+    );
+
     let coverById = new Map<string, string>();
+    let faceBboxById = new Map<number, any>();
+
     if (coverIds.length) {
       const { data: coverRows } = await supabase
         .from("photos")
@@ -147,10 +175,20 @@ export async function GET(request: Request) {
       coverById = new Map((coverRows || []).map((row) => [String(row.id), row.path || ""]));
     }
 
+    if (coverFaceIds.length) {
+      const { data: faceRows } = await supabase
+        .from("face_embeddings")
+        .select("id, bbox")
+        .in("id", coverFaceIds);
+
+      faceBboxById = new Map((faceRows || []).map((row) => [Number(row.id), row.bbox]));
+    }
+
     const people = (clusters || []).map((row) => {
       const clusterId = Number(row.id);
       const stats = statsByCluster.get(clusterId);
       const coverPhotoId = row.cover_photo_id ? String(row.cover_photo_id) : null;
+      const coverFaceId = row.cover_face_id ? Number(row.cover_face_id) : null;
 
       return {
         id: clusterId,
@@ -159,6 +197,7 @@ export async function GET(request: Request) {
         event_count: stats?.eventIds.size || 0,
         cover_photo_id: coverPhotoId,
         cover_url: coverPhotoId ? coverById.get(coverPhotoId) || null : null,
+        cover_face_bbox: coverFaceId ? faceBboxById.get(coverFaceId) || null : null,
         updated_at: row.updated_at || null,
       };
     });

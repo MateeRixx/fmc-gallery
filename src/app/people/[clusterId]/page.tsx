@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import PhotoModal from "@/components/PhotoModal";
+import { getCurrentUser } from "@/lib/jwt";
+import { Permission } from "@/types";
 
 type PersonPhoto = {
   photo_id: string;
@@ -17,46 +20,62 @@ type PersonPhoto = {
 export default function PersonDetailPage() {
   const params = useParams<{ clusterId: string }>();
   const clusterId = params?.clusterId || "";
+  const [user] = useState(getCurrentUser());
 
   const [photos, setPhotos] = useState<PersonPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
+  // Photo modal state
+  const [selectedPhoto, setSelectedPhoto] = useState<PersonPhoto | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
-    async function loadPhotos() {
-      setLoading(true);
-      setStatus("");
+  const canDelete = user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS) ||
+                   user?.role === 'head' || user?.role === 'co_head';
 
-      try {
-        const response = await fetch(`/api/faces/people/${clusterId}`);
-        const data = await response.json();
+  const loadPhotos = async () => {
+    setLoading(true);
+    setStatus("");
 
-        if (!response.ok) {
-          if (!cancelled) setStatus(data.error || "Failed to load person photos");
-          return;
-        }
+    try {
+      const response = await fetch(`/api/faces/people/${clusterId}`);
+      const data = await response.json();
 
-        if (!cancelled) {
-          setPhotos((data.photos || []) as PersonPhoto[]);
-        }
-      } catch (error) {
-        console.error("Failed to load person photos:", error);
-        if (!cancelled) setStatus("Could not load person photos.");
-      } finally {
-        if (!cancelled) setLoading(false);
+      if (!response.ok) {
+        setStatus(data.error || "Failed to load person photos");
+        return;
       }
-    }
 
+      setPhotos((data.photos || []) as PersonPhoto[]);
+    } catch (error) {
+      console.error("Failed to load person photos:", error);
+      setStatus("Could not load person photos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (clusterId) {
       loadPhotos();
     }
-
-    return () => {
-      cancelled = true;
-    };
   }, [clusterId]);
+
+  const handlePhotoClick = (photo: PersonPhoto) => {
+    setSelectedPhoto(photo);
+    setModalOpen(true);
+  };
+
+  const handlePhotoDeleted = () => {
+    // Refresh the photos list after successful deletion
+    loadPhotos();
+    setSelectedPhoto(null);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedPhoto(null);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -66,7 +85,14 @@ export default function PersonDetailPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl md:text-5xl font-black">Person {clusterId}</h1>
-            <p className="mt-3 text-gray-300">Matched photos across events: {photos.length}</p>
+            <div className="mt-3 flex items-center gap-4">
+              <p className="text-gray-300">Matched photos across events: {photos.length}</p>
+              {canDelete && (
+                <span className="px-2 py-1 text-xs bg-red-500/20 text-red-300 rounded border border-red-500/30">
+                  👑 Admin Mode - Can delete photos
+                </span>
+              )}
+            </div>
           </div>
           <Link
             href="/people"
@@ -90,34 +116,74 @@ export default function PersonDetailPage() {
               No photos found for this person cluster.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {photos.map((photo) => (
-                <div
-                  key={photo.photo_id}
-                  className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-[#FFBF00] transition cursor-pointer"
-                >
-                  <div className="aspect-square bg-white/5">
-                    <img
-                      src={photo.photo_url}
-                      alt={`Person ${clusterId} match`}
-                      className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
-                    />
-                  </div>
-
-                  {/* Hover overlay with event info */}
-                  {photo.event_slug && (
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-end justify-start p-3">
-                      <p className="text-xs text-white font-medium">
-                        {photo.event_title || photo.event_slug}
-                      </p>
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.photo_id}
+                    className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-[#FFBF00] transition cursor-pointer"
+                    onClick={() => handlePhotoClick(photo)}
+                  >
+                    <div className="aspect-square bg-white/5">
+                      <img
+                        src={photo.photo_url}
+                        alt={`Person ${clusterId} match`}
+                        className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
+                      />
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+
+                    {/* Hover overlay with event info and admin badge */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col justify-between p-3">
+                      {/* Event title at bottom */}
+                      {photo.event_slug && (
+                        <div className="flex-1" />
+                      )}
+                      <div className="space-y-2">
+                        {photo.event_slug && (
+                          <p className="text-xs text-white font-medium">
+                            {photo.event_title || photo.event_slug}
+                          </p>
+                        )}
+                        {canDelete && (
+                          <div className="flex items-center gap-1 text-[10px] text-red-300">
+                            <span>🗑️</span>
+                            <span>Click to view/delete</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quality score indicator */}
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
+                      <span className="text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded">
+                        Q: {(photo.quality_score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Instruction text */}
+              <div className="mt-6 text-center text-sm text-gray-400">
+                Click any photo to view in full size{canDelete ? " or delete as admin" : ""}
+              </div>
+            </>
           )}
         </div>
       </section>
+
+      {/* Photo Modal */}
+      {selectedPhoto && (
+        <PhotoModal
+          isOpen={modalOpen}
+          onClose={closeModal}
+          photoUrl={selectedPhoto.photo_url}
+          photoId={selectedPhoto.photo_id}
+          eventTitle={selectedPhoto.event_title}
+          clusterId={clusterId}
+          onPhotoDeleted={handlePhotoDeleted}
+        />
+      )}
     </div>
   );
 }
