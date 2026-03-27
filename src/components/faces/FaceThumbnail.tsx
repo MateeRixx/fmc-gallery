@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 type FaceThumbnailProps = {
   photoUrl: string;
@@ -65,12 +66,14 @@ export default function FaceThumbnail({ photoUrl, bbox, alt, className = "" }: F
 
   // Fallback: show full photo centered on face region
   return (
-    <div className={`w-full h-full overflow-hidden bg-black rounded-xl ${className}`}>
-      <img
+    <div className={`relative w-full h-full overflow-hidden bg-black rounded-xl ${className}`}>
+      <Image
         src={photoUrl}
         alt={alt}
+        fill
+        sizes="(max-width: 768px) 50vw, 20vw"
         onError={() => setImageError(true)}
-        className="w-full h-full object-cover"
+        className="object-cover"
       />
     </div>
   );

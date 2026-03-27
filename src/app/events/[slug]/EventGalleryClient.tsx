@@ -13,7 +13,7 @@ export type EventData = {
   images: readonly string[];
 };
 
-function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSelected?: boolean }) {
+function GalleryImage({ src, alt, index, isSelected }: { src: string; alt: string; index: number; isSelected?: boolean }) {
   const [visible, setVisible] = useState(true);
 
   if (!visible) return null;
@@ -23,11 +23,10 @@ function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSe
       alt={alt}
       width={800}
       height={600}
-      loading="lazy"
-      unoptimized
+      priority={index < 4}
       sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setVisible(false)}
-      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+      className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${isSelected ? 'ring-4 ring-purple-500 brightness-110 scale-[0.98]' : ''}`}
     />
   );
 }
@@ -244,6 +243,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
                     <GalleryImage
                       src={src}
                       alt={`${event.name} gallery ${i + 1}`}
+                      index={i}
                       isSelected={selectedImages.has(i)}
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />

@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import OptimizedImage from "./OptimizedImage";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
@@ -58,7 +58,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
         }}
       >
         <div className="relative aspect-4/5">
-          <Image
+          <OptimizedImage
             src={cover}
             alt={event?.title || "Event image"}
             fill

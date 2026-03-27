@@ -1,5 +1,5 @@
 // src/components/EventCard.tsx
-import Image from "next/image";
+import OptimizedImage from "./OptimizedImage";
 import Link from "next/link";
 
 interface Event {
@@ -29,7 +29,7 @@ export default function EventCard({ event, isActive = false }: Props) {
         bg-linear-to-br from-gray-900/50 to-black/50 backdrop-blur-sm border border-white/10
       `}>
         {/* Cover Image */}
-        <Image
+        <OptimizedImage
           src={cover}
           alt={event.name}
           fill

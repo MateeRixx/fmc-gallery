@@ -144,8 +144,7 @@ export default function ClusterPhotosPage({ params }: { params: Promise<{ slug: 
                         alt={`Photo ${i + 1}`}
                         width={800}
                         height={600}
-                        loading="lazy"
-                        unoptimized
+                        priority={i < 4}
                         sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />

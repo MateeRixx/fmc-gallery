@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { getCurrentUser } from "@/lib/jwt";
 import { Permission } from "@/types";
 
@@ -107,7 +108,7 @@ export default function PhotoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
       {/* Modal Container */}
-      <div className="relative max-w-7xl max-h-[90vh] w-full bg-black/80 rounded-2xl border border-white/20 overflow-hidden">
+      <div className="relative max-w-7xl w-full h-full max-h-[90vh] bg-black/80 rounded-2xl border border-white/20 overflow-hidden flex flex-col">
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
@@ -145,11 +146,14 @@ export default function PhotoModal({
         </div>
 
         {/* Photo */}
-        <div className="flex items-center justify-center h-full min-h-[400px] max-h-[90vh] p-4">
-          <img
+        <div className="relative flex-1 w-full min-h-[300px] p-6">
+          <Image
             src={photoUrl}
             alt="Photo preview"
-            className="max-w-full max-h-full object-contain rounded-lg"
+            fill
+            priority
+            sizes="(max-width: 1280px) 100vw, 1280px"
+            className="object-contain"
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
           />
         </div>
