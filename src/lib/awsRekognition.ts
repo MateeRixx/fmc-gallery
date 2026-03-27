@@ -39,11 +39,15 @@ export async function ensureCollectionExists() {
     return { created: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorName =
+      typeof error === "object" && error !== null && "name" in error
+        ? String((error as { name?: unknown }).name || "")
+        : "";
     // Check for various forms of "collection already exists" errors
     if (
       message.includes("ResourceAlreadyExistsException") ||
       message.includes("already exists") ||
-      (error as any)?.name === "ResourceAlreadyExistsException"
+      errorName === "ResourceAlreadyExistsException"
     ) {
       return { created: false };
     }
@@ -103,15 +107,33 @@ export async function searchFacesByFaceId(params: {
   maxFaces?: number;
 }) {
   const rekognition = createRekognitionClient();
+  let response;
 
-  const response = await rekognition.send(
-    new SearchFacesCommand({
-      CollectionId: collectionId,
-      FaceId: params.awsFaceId,
-      FaceMatchThreshold: params.similarityThreshold,
-      MaxFaces: params.maxFaces ?? 100,
-    })
-  );
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      response = await rekognition.send(
+        new SearchFacesCommand({
+          CollectionId: collectionId,
+          FaceId: params.awsFaceId,
+          FaceMatchThreshold: params.similarityThreshold,
+          MaxFaces: params.maxFaces ?? 100,
+        })
+      );
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isRetriable =
+        message.toLowerCase().includes("fetch failed") ||
+        message.toLowerCase().includes("timeout") ||
+        message.toLowerCase().includes("network");
+
+      if (!isRetriable || attempt === 3) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+    }
+  }
 
   return (response.FaceMatches || [])
     .map((match) => {

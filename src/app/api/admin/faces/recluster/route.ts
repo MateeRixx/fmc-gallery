@@ -252,12 +252,37 @@ async function runAwsClusteringGlobal(params: {
   }
 
   // PASS 3: Merge duplicate clusters (same person in multiple clusters)
-  onProgress?.(`Pass 3: Checking for duplicate clusters...`);
-  const mergeResult = await mergeDuplicateClusters({
-    supabase,
-    clusterIds: createdClusterIds,
-    threshold,
-  });
+  let mergeResult: {
+    merged_clusters: number;
+    skipped?: boolean;
+    reason?: string;
+  } = { merged_clusters: 0 };
+
+  if (createdClusterIds.length > 80) {
+    mergeResult = {
+      merged_clusters: 0,
+      skipped: true,
+      reason: `Skipped duplicate merge for ${createdClusterIds.length} clusters to keep reclustering stable`,
+    };
+    onProgress?.(mergeResult.reason);
+  } else {
+    onProgress?.(`Pass 3: Checking for duplicate clusters...`);
+    try {
+      mergeResult = await mergeDuplicateClusters({
+        supabase,
+        clusterIds: createdClusterIds,
+        threshold,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[PASS 3] Duplicate merge failed:", error);
+      mergeResult = {
+        merged_clusters: 0,
+        skipped: true,
+        reason: `Duplicate merge skipped after error: ${message}`,
+      };
+    }
+  }
 
   return {
     ok: true,
@@ -268,6 +293,8 @@ async function runAwsClusteringGlobal(params: {
     search_errors: searchErrors,
     clusters_needing_audit: clustersNeedingAudit,
     merged_duplicates: mergeResult.merged_clusters || 0,
+    duplicate_merge_skipped: Boolean(mergeResult.skipped),
+    duplicate_merge_reason: mergeResult.reason || null,
     debug: { distanceLogs, edges: edges.length },
     method: "aws-global",
   };
