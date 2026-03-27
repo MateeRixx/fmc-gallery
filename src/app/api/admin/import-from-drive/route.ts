@@ -12,6 +12,8 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/middleware";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
+import { indexFacesFromImageBytes } from "@/lib/awsRekognition";
+import { mergeNewFacesIntoExistingClusters } from "@/app/api/admin/faces/recluster/route";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
@@ -19,7 +21,15 @@ const MAX_FILES = 300;
 
 function extractFolderId(url: string): string | null {
   const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
+  if (match) return match[1];
+
+  try {
+    const parsedUrl = new URL(url);
+    const queryId = parsedUrl.searchParams.get("id");
+    return queryId || null;
+  } catch {
+    return null;
+  }
 }
 
 async function listDriveImages(folderId: string, apiKey: string): Promise<{ id: string; name: string; mimeType: string }[]> {
@@ -33,7 +43,7 @@ async function listDriveImages(folderId: string, apiKey: string): Promise<{ id: 
   do {
     const tokenParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
     const res = await fetch(
-      `${DRIVE_API}/files?q=${q}&fields=${fields}&pageSize=100&key=${apiKey}${tokenParam}`
+      `${DRIVE_API}/files?q=${q}&fields=${fields}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true&key=${apiKey}${tokenParam}`
     );
 
     if (!res.ok) {
@@ -50,9 +60,31 @@ async function listDriveImages(folderId: string, apiKey: string): Promise<{ id: 
 }
 
 async function downloadDriveFile(fileId: string, apiKey: string): Promise<ArrayBuffer> {
-  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&key=${apiKey}`);
-  if (!res.ok) throw new Error(`Failed to download file ${fileId}: ${res.status}`);
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media&supportsAllDrives=true&key=${apiKey}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Failed to download file ${fileId}: ${res.status}`);
+  }
   return res.arrayBuffer();
+}
+
+function getGoogleDriveApiKey() {
+  const candidates = [
+    "GOOGLE_DRIVE_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_DRIVE_KEY",
+    "GOOGLE_DRIVE_TOKEN",
+    "GOOGLE_API_TOKEN",
+  ] as const;
+
+  for (const name of candidates) {
+    const value = process.env[name];
+    if (value && value.trim()) {
+      return { name, value: value.trim() };
+    }
+  }
+
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -64,9 +96,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const apiKey = process.env.GOOGLE_DRIVE_API_KEY;
-  if (!apiKey) {
-    return Response.json({ error: "Google Drive API key not configured" }, { status: 500 });
+  const driveApiKey = getGoogleDriveApiKey();
+  if (!driveApiKey) {
+    return Response.json({
+      error: "Google Drive API key not configured. Set GOOGLE_DRIVE_API_KEY or GOOGLE_API_KEY in Vercel.",
+    }, { status: 500 });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -109,7 +143,7 @@ export async function POST(request: NextRequest) {
   // List image files from Drive
   let driveFiles: { id: string; name: string; mimeType: string }[];
   try {
-    driveFiles = await listDriveImages(folderId, apiKey);
+    driveFiles = await listDriveImages(folderId, driveApiKey.value);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return Response.json({ error: `Could not read Drive folder: ${msg}` }, { status: 400 });
@@ -123,9 +157,11 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const uploadedUrls: string[] = [];
       const errors: string[] = [];
+      const newFaceIds: number[] = [];
       const total = driveFiles.length;
+      let importedCount = 0;
+      let indexedFaces = 0;
 
       try {
         for (let i = 0; i < driveFiles.length; i++) {
@@ -133,7 +169,7 @@ export async function POST(request: NextRequest) {
           const progress = Math.round(((i + 1) / total) * 100);
 
           try {
-            const buffer = await downloadDriveFile(file.id, apiKey);
+            const buffer = await downloadDriveFile(file.id, driveApiKey.value);
             const ext = file.name.split(".").pop() || "jpg";
             const storagePath = `${event_slug}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
@@ -145,7 +181,52 @@ export async function POST(request: NextRequest) {
               errors.push(`${file.name}: ${uploadError.message}`);
             } else {
               const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(storagePath);
-              uploadedUrls.push(urlData.publicUrl);
+              const publicUrl = urlData.publicUrl;
+              const { data: savedPhoto, error: photoInsertError } = await supabase
+                .from("photos")
+                .insert({ event_id: event.id, path: publicUrl })
+                .select("id, event_id, path")
+                .single();
+
+              if (photoInsertError || !savedPhoto) {
+                errors.push(`${file.name}: ${photoInsertError?.message || "Failed to save photo record"}`);
+              } else {
+                importedCount += 1;
+
+                const awsFaces = await indexFacesFromImageBytes({
+                  imageBytes: new Uint8Array(buffer),
+                  externalImageId: String(savedPhoto.id),
+                });
+
+                if (awsFaces.length > 0) {
+                  const faceRows = awsFaces.map((face) => ({
+                    photo_id: savedPhoto.id,
+                    event_id: savedPhoto.event_id,
+                    embedding: null,
+                    aws_face_id: face.awsFaceId,
+                    bbox: face.bbox,
+                    quality_score: face.qualityScore,
+                    detection_method: "aws",
+                    aws_indexed_at: new Date().toISOString(),
+                  }));
+
+                  const { data: insertedFaces, error: faceInsertError } = await supabase
+                    .from("face_embeddings")
+                    .insert(faceRows)
+                    .select("id");
+
+                  if (faceInsertError) {
+                    errors.push(`${file.name}: ${faceInsertError.message}`);
+                  } else {
+                    indexedFaces += faceRows.length;
+                    newFaceIds.push(
+                      ...(insertedFaces || [])
+                        .map((face) => Number(face.id))
+                        .filter((id) => Number.isFinite(id))
+                    );
+                  }
+                }
+              }
             }
           } catch (err) {
             errors.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
@@ -158,26 +239,49 @@ export async function POST(request: NextRequest) {
                 progress,
                 current: i + 1,
                 total,
+                imported: importedCount,
+                indexed_faces: indexedFaces,
                 status: `Processed ${i + 1}/${total} images...`,
               })}\n\n`
             )
           );
         }
 
-        // Save uploaded URLs to photos table in batches
-        if (uploadedUrls.length > 0) {
-          const rows = uploadedUrls.map((path) => ({ event_id: event.id, path }));
-          const { error: insertError } = await supabase.from("photos").insert(rows);
-          if (insertError) {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  error: `Photos saved to storage but DB insert failed: ${insertError.message}`,
-                })}\n\n`
-              )
-            );
-            controller.close();
-            return;
+        let clusteringSummary: Record<string, number> | undefined;
+        if (newFaceIds.length > 0) {
+          const clusteringResult = await mergeNewFacesIntoExistingClusters({
+            supabase,
+            newFaceIds,
+            threshold: 0.35,
+            minQuality: 0.45,
+            onProgress: (status) => {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    progress: 100,
+                    current: total,
+                    total,
+                    imported: importedCount,
+                    indexed_faces: indexedFaces,
+                    status,
+                  })}\n\n`
+                )
+              );
+            },
+          });
+
+          if ((clusteringResult as { error?: string }).error) {
+            errors.push(`Clustering: ${(clusteringResult as { error: string }).error}`);
+          } else {
+            const mergedFaces = Number((clusteringResult as { merged_faces?: number }).merged_faces || 0);
+            const newlyClusteredFaces = Number((clusteringResult as { newly_clustered_faces?: number }).newly_clustered_faces || 0);
+            const unmatchedFaces = Number((clusteringResult as { unmatched_faces?: number }).unmatched_faces || 0);
+            clusteringSummary = {
+              merged_faces: mergedFaces,
+              clustered_faces: mergedFaces + newlyClusteredFaces,
+              new_clusters_created: Number((clusteringResult as { new_clusters_created?: number }).new_clusters_created || 0),
+              unmatched_faces: unmatchedFaces,
+            };
           }
         }
 
@@ -186,7 +290,10 @@ export async function POST(request: NextRequest) {
           encoder.encode(
             `data: ${JSON.stringify({
               complete: true,
-              count: uploadedUrls.length,
+              count: importedCount,
+              indexed_faces: indexedFaces,
+              clustered_faces: clusteringSummary?.clustered_faces || 0,
+              clustering: clusteringSummary,
               skipped: errors.length,
               errors: errors.length > 0 ? errors : undefined,
             })}\n\n`

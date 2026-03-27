@@ -37,6 +37,14 @@ type AwsFaceRow = {
   cluster_id: number | null;
 };
 
+type ClusterableAwsFace = {
+  id: number;
+  photo_id: string;
+  aws_face_id: string;
+  quality_score: number;
+  embedding: number[];
+};
+
 class UnionFind {
   private parent: number[];
 
@@ -550,7 +558,10 @@ async function detectAndMergeOverlappingClusters(params: {
     // Update member count
     await supabase
       .from("face_clusters")
-      .update({ member_count: larger.member_count + smaller.member_count })
+      .update({
+        member_count: larger.member_count + smaller.member_count,
+        face_count: larger.member_count + smaller.member_count,
+      })
       .eq("id", larger.id);
 
     // Delete smaller cluster
@@ -558,6 +569,153 @@ async function detectAndMergeOverlappingClusters(params: {
 
     console.log(`Merged cluster ${smaller.id} into cluster ${larger.id}`);
   }
+}
+
+async function createClustersForUnmatchedFaces(params: {
+  supabase: any;
+  faceIds: number[];
+  threshold: number;
+  minQuality: number;
+  onProgress?: (status: string) => void;
+}) {
+  const { supabase, faceIds, threshold, minQuality, onProgress } = params;
+
+  if (faceIds.length === 0) {
+    return {
+      ok: true,
+      created_clusters: 0,
+      clustered_faces: 0,
+      remaining_unclustered_faces: 0,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("face_embeddings")
+    .select("id, photo_id, aws_face_id, quality_score, embedding")
+    .in("id", faceIds)
+    .not("aws_face_id", "is", null);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const usableFaces: ClusterableAwsFace[] = (data || [])
+    .map((row: any) => ({
+      id: Number(row.id),
+      photo_id: String(row.photo_id || ""),
+      aws_face_id: String(row.aws_face_id || ""),
+      quality_score: Number(row.quality_score || 0),
+      embedding: parsePgVector(row.embedding),
+    }))
+    .filter(
+      (row: ClusterableAwsFace) =>
+        Number.isFinite(row.id) &&
+        !!row.photo_id &&
+        !!row.aws_face_id &&
+        row.quality_score >= minQuality
+    );
+
+  if (usableFaces.length === 0) {
+    return {
+      ok: true,
+      created_clusters: 0,
+      clustered_faces: 0,
+      remaining_unclustered_faces: faceIds.length,
+    };
+  }
+
+  onProgress?.(`Creating clusters for ${usableFaces.length} unmatched face(s)...`);
+
+  const indexByFaceId = new Map<string, number>();
+  usableFaces.forEach((row, index) => {
+    indexByFaceId.set(row.aws_face_id, index);
+  });
+
+  const similarityThreshold = Math.max(1, Math.min(99, (1 - threshold) * 100));
+  const edges: [number, number][] = [];
+
+  for (let i = 0; i < usableFaces.length; i += 1) {
+    if (i % 10 === 0) {
+      onProgress?.(`Building new clusters ${i + 1}/${usableFaces.length}...`);
+    }
+
+    try {
+      const matches = await searchFacesByFaceId({
+        awsFaceId: usableFaces[i].aws_face_id,
+        similarityThreshold,
+        maxFaces: 50,
+      });
+
+      for (const match of matches) {
+        const matchedIndex = indexByFaceId.get(match.awsFaceId);
+        if (matchedIndex === undefined || matchedIndex === i) continue;
+        edges.push([i, matchedIndex]);
+      }
+    } catch (error) {
+      console.error(`Failed to build unmatched cluster for face ${usableFaces[i].id}:`, error);
+    }
+  }
+
+  const unionFind = new UnionFind(usableFaces.length);
+  for (const [a, b] of edges) {
+    unionFind.union(a, b);
+  }
+
+  const membersByRoot = new Map<number, ClusterableAwsFace[]>();
+  for (let i = 0; i < usableFaces.length; i += 1) {
+    const root = unionFind.find(i);
+    const current = membersByRoot.get(root) || [];
+    current.push(usableFaces[i]);
+    membersByRoot.set(root, current);
+  }
+
+  let createdClusters = 0;
+  let clusteredFaces = 0;
+
+  for (const members of Array.from(membersByRoot.values())) {
+    const centroidVector =
+      members.find((member) => member.embedding.length === 128)?.embedding ||
+      new Array<number>(128).fill(0);
+    const coverPhotoId = members[0]?.photo_id || null;
+    const coverFaceId = members[0]?.id || null;
+
+    const { data: clusterRow, error: clusterInsertError } = await supabase
+      .from("face_clusters")
+      .insert({
+        canonical_embedding: vectorToPgString(centroidVector),
+        face_count: members.length,
+        cover_photo_id: coverPhotoId,
+        cover_face_id: coverFaceId,
+        member_count: members.length,
+      })
+      .select("id")
+      .single();
+
+    if (clusterInsertError || !clusterRow) {
+      return { error: clusterInsertError?.message || "Failed to create unmatched cluster" };
+    }
+
+    const clusterId = Number(clusterRow.id);
+    const memberIds = members.map((member) => member.id);
+    const { error: assignError } = await supabase
+      .from("face_embeddings")
+      .update({ cluster_id: clusterId })
+      .in("id", memberIds);
+
+    if (assignError) {
+      return { error: assignError.message };
+    }
+
+    createdClusters += 1;
+    clusteredFaces += memberIds.length;
+  }
+
+  return {
+    ok: true,
+    created_clusters: createdClusters,
+    clustered_faces: clusteredFaces,
+    remaining_unclustered_faces: Math.max(faceIds.length - clusteredFaces, 0),
+  };
 }
 
 // ============================================================================
@@ -602,7 +760,7 @@ export async function mergeNewFacesIntoExistingClusters(params: {
 
   const similarityThreshold = Math.max(1, Math.min(99, (1 - threshold) * 100));
   let mergedCount = 0;
-  let unmatchedFaceIds: number[] = [];
+  const unmatchedFaceIds: number[] = [];
   const clusterMatchCounts = new Map<number, number[]>(); // clusterId -> matching face IDs
 
   for (let i = 0; i < usableNewFaces.length; i++) {
@@ -675,17 +833,21 @@ export async function mergeNewFacesIntoExistingClusters(params: {
       }
 
       // Update cluster member_count
-      await supabase.rpc("increment", {
-        table_name: "face_clusters",
-        row_id: bestClusterId,
-        column_name: "member_count",
-      }).catch(() => {
-        // Fallback: manual update
-        supabase
-          .from("face_clusters")
-          .update({ member_count: supabase.raw("member_count + 1") })
-          .eq("id", bestClusterId);
-      });
+      const { data: currentCluster } = await supabase
+        .from("face_clusters")
+        .select("member_count, face_count")
+        .eq("id", bestClusterId)
+        .maybeSingle();
+
+      const nextMemberCount = Number(currentCluster?.member_count || currentCluster?.face_count || 0) + 1;
+
+      await supabase
+        .from("face_clusters")
+        .update({
+          member_count: nextMemberCount,
+          face_count: nextMemberCount,
+        })
+        .eq("id", bestClusterId);
 
       mergedCount += 1;
 
@@ -712,11 +874,25 @@ export async function mergeNewFacesIntoExistingClusters(params: {
     });
   }
 
+  const clusterCreationResult = await createClustersForUnmatchedFaces({
+    supabase,
+    faceIds: unmatchedFaceIds,
+    threshold,
+    minQuality,
+    onProgress,
+  });
+
+  if ((clusterCreationResult as { error?: string }).error) {
+    return { error: (clusterCreationResult as { error: string }).error };
+  }
+
   return {
     ok: true,
     merged_faces: mergedCount,
-    unmatched_faces: unmatchedFaceIds.length,
+    unmatched_faces: (clusterCreationResult as { remaining_unclustered_faces: number }).remaining_unclustered_faces,
     clusters_updated: clusterMatchCounts.size,
+    new_clusters_created: (clusterCreationResult as { created_clusters: number }).created_clusters,
+    newly_clustered_faces: (clusterCreationResult as { clustered_faces: number }).clustered_faces,
   };
 }
 
