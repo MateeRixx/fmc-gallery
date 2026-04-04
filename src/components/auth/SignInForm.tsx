@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { storeToken } from "@/lib/jwt";
+import { signIn } from "next-auth/react";
+import GoogleSignUpButton from "./GoogleSignUpButton";
 
 interface SignInFormProps {
   onSuccess?: () => void;
@@ -12,7 +12,7 @@ export default function SignInForm({ onSuccess }: SignInFormProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [linkSent, setLinkSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,38 +24,32 @@ export default function SignInForm({ onSuccess }: SignInFormProps) {
     }
 
     setLoading(true);
-    setStatus("Authenticating...");
+    setStatus("Sending sign-in link...");
 
     try {
-      const response = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalized }),
+      const result = await signIn("email", {
+        email: normalized,
+        redirect: false,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setStatus(`❌ ${data.error || "Login failed"}`);
+      if (result?.error) {
+        setStatus(`❌ ${result.error}`);
         setLoading(false);
         return;
       }
 
-      if (data.token) {
-        storeToken(data.token);
-        setStatus("✓ Login successful!");
+      // Link sent successfully
+      setStatus("✓ Check your email for the sign-in link!");
+      setLinkSent(true);
+      setEmail("");
+      setLoading(false);
 
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          setTimeout(() => router.push("/admin"), 500);
-        }
-      } else {
-        setStatus("❌ No token received");
-        setLoading(false);
-      }
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        setStatus("");
+      }, 5000);
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Sign-in error:", err);
       setStatus("❌ Connection error. Please try again.");
       setLoading(false);
     }
@@ -84,12 +78,27 @@ export default function SignInForm({ onSuccess }: SignInFormProps) {
         disabled={loading || !email.trim()}
         className="w-full bg-white text-black font-bold py-3 rounded-lg hover:bg-gray-200 disabled:bg-gray-400 transition"
       >
-        {loading ? "Signing in..." : "Sign In"}
+        {loading ? "Sending link..." : "Sign In with Email"}
       </button>
 
       {status && (
-        <div className="p-3 rounded-lg bg-white/10 border border-white/20 text-center text-sm text-gray-200">
+        <div
+          className={`p-3 rounded-lg border text-center text-sm ${
+            linkSent
+              ? "bg-green-500/20 border-green-500/50 text-green-200"
+              : "bg-white/10 border-white/20 text-gray-200"
+          }`}
+        >
           {status}
+        </div>
+      )}
+
+      {linkSent && (
+        <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-200 text-xs">
+          <p className="font-semibold mb-2">📧 What's next?</p>
+          <p>We sent a sign-in link to <strong>{email}</strong></p>
+          <p className="mt-2">Click the link in your email to sign in instantly. No password needed!</p>
+          <p className="mt-2 text-blue-300">Link expires in 24 hours.</p>
         </div>
       )}
 
@@ -97,6 +106,19 @@ export default function SignInForm({ onSuccess }: SignInFormProps) {
         Existing members only. Need an account?<br />
         Contact your Head or Co-Head for an invitation.
       </p>
+
+      {/* Google OAuth Divider */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-white/20"></div>
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="px-2 bg-black text-gray-400">or continue with Google</span>
+        </div>
+      </div>
+
+      {/* Google Sign In Button */}
+      <GoogleSignUpButton variant="signin" fullWidth />
     </form>
   );
 }

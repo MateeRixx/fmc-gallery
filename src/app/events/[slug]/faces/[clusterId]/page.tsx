@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import PhotoModal from "@/components/PhotoModal";
-import { getCurrentUser } from "@/lib/jwt";
 import { Permission } from "@/types";
 import { supabase } from "@/lib/supabase";
 
@@ -17,7 +17,7 @@ type PersonPhoto = {
 
 export default function ClusterPhotosPage({ params }: { params: Promise<{ slug: string; clusterId: string }> }) {
   const { slug, clusterId } = React.use(params);
-  const [user] = useState(getCurrentUser());
+  const { data: session } = useSession();
 
   const [eventName, setEventName] = useState("");
   const [photos, setPhotos] = useState<PersonPhoto[]>([]);
@@ -28,8 +28,8 @@ export default function ClusterPhotosPage({ params }: { params: Promise<{ slug: 
   const [selectedPhoto, setSelectedPhoto] = useState<PersonPhoto | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const canDelete = user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS) ||
-                   user?.role === 'head' || user?.role === 'co_head';
+  const canDelete = session?.user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS) ||
+                   session?.user?.role === 'head' || session?.user?.role === 'co_head';
 
   const loadData = async () => {
     try {

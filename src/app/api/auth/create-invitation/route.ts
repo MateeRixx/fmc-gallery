@@ -2,40 +2,81 @@
  * API Route: POST /api/auth/create-invitation
  *
  * Create and send invitation token for admin roles
- * Requires authentication (Bearer token) and appropriate role
+ * Requires authentication and appropriate role
  * - MASTER/HEAD: Can invite Head, Co-Head, Executive, Member
  * - CO_HEAD: Can only invite Executive, Member (NOT Co-Head)
  * - Others: Cannot invite anyone
  */
 
-import { verifyJWT, extractTokenFromHeader } from "@/lib/jwt";
+import { requireAuth } from "@/lib/auth-utils";
 import { canInviteRole } from "@/lib/roleDefaults";
-import { createAndSendInvitation } from "@/lib/otp";
+import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@/types";
+import { v4 as uuidv4 } from "uuid";
+import { sendInvitationEmail } from "@/lib/email";
+
+// Helper function to create and send invitation (replaces createAndSendInvitation from otp.ts)
+async function createAndSendInvitation(
+  target_email: string,
+  target_role: string,
+  requester_email: string
+) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: "Database not configured" };
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const token = uuidv4();
+  const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const { data, error } = await supabase
+    .from("invitations")
+    .insert({
+      token,
+      email: target_email,
+      role: target_role,
+      created_by: requester_email,
+      expires_at: expires_at.toISOString(),
+      is_used: false,
+    })
+    .select("token")
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Send invitation email via Resend
+  const emailResult = await sendInvitationEmail({
+    to: target_email,
+    invitationToken: data.token,
+    role: target_role,
+    invitedBy: requester_email,
+  });
+
+  if (!emailResult.success) {
+    console.error('Failed to send invitation email:', emailResult.error);
+    // Note: We don't fail the invitation creation if email fails
+    // The invitation is still valid and can be used manually
+  }
+
+  return { 
+    success: true, 
+    token: data.token,
+    emailSent: emailResult.success,
+  };
+}
 
 export async function POST(request: Request) {
   try {
     // ===== AUTHENTICATION =====
-    const auth_header = request.headers.get("authorization");
-    const token = extractTokenFromHeader(auth_header);
+    const user = await requireAuth();
 
-    if (!token) {
-      return Response.json(
-        { error: "Authorization header required (Bearer token)" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyJWT(token);
-    if (!decoded) {
-      return Response.json(
-        { error: "Invalid or expired token" },
-        { status: 401 }
-      );
-    }
-
-    const requester_email = decoded.email;
-    const requester_role = decoded.role as UserRole;
+    const requester_email = user.email;
+    const requester_role = user.role as UserRole;
 
     // ===== VALIDATION =====
     const body = await request.json();
@@ -103,13 +144,12 @@ export async function POST(request: Request) {
     const invitation = await createAndSendInvitation(
       normalized_email,
       normalized_role as "head" | "co_head" | "executive" | "member",
-      decoded.sub,
-      decoded.email.split("@")[0] // Use email prefix as display name
+      requester_email
     );
 
     if (!invitation.success) {
       return Response.json(
-        { error: invitation.message },
+        { error: invitation.error },
         { status: 500 }
       );
     }
@@ -117,11 +157,11 @@ export async function POST(request: Request) {
     // ===== SUCCESS RESPONSE =====
     return Response.json({
       success: true,
-      message: invitation.message,
       token: invitation.token,
       email: normalized_email,
       role: normalized_role,
       expires_in: "7 days",
+      emailSent: invitation.emailSent || false,
     });
 
   } catch (err) {

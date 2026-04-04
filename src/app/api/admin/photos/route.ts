@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requirePermission } from "@/lib/middleware";
+import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
 
 export async function POST(request: NextRequest) {
-  const user = await requirePermission(request, Permission.CAN_UPLOAD_PHOTOS);
+  const user = await requirePermissionCompat(request, Permission.CAN_UPLOAD_PHOTOS);
   if (user instanceof Response) return user;
 
   try {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await requirePermission(request, Permission.CAN_DELETE_PHOTOS);
+  const user = await requirePermissionCompat(request, Permission.CAN_DELETE_PHOTOS);
   if (user instanceof Response) return user;
 
   try {
@@ -97,6 +97,17 @@ export async function DELETE(request: NextRequest) {
 
     if (!deletedPhoto) {
       return Response.json({ error: "Photo not found" }, { status: 404 });
+    }
+
+    // Delete the actual image file from Supabase Storage
+    if (deletedPhoto.path) {
+      const { error: storageError } = await supabase.storage
+        .from("event-images")
+        .remove([deletedPhoto.path]);
+        
+      if (storageError) {
+        console.error("Failed to delete photo file from storage:", storageError.message);
+      }
     }
 
     console.log(`[DELETE PHOTO] Successfully deleted photo ${photo_id} and related face data`);

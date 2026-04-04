@@ -15,6 +15,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { User, UserRole, Permission } from "@/types";
 import { formatRole, formatPermission, getExecutivePermissions } from "@/lib/rbac";
 
@@ -23,6 +24,7 @@ interface UserManagementPanelProps {
 }
 
 export default function UserManagementPanel({ onRefresh }: UserManagementPanelProps) {
+  const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -46,11 +48,8 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
   async function fetchUsers() {
     try {
       setLoading(true);
-      const token = localStorage.getItem("fmc-auth-token");
       const response = await fetch("/api/admin/users", {
-        headers: {
-          "Authorization": `Bearer ${token || ""}`,
-        },
+        method: "GET",
       });
 
       if (!response.ok) {
@@ -76,11 +75,9 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
       setError("");
       setMessage("");
 
-      const token = localStorage.getItem("fmc-auth-token");
       const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: "PATCH",
         headers: {
-          "Authorization": `Bearer ${token || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ newRole }),
@@ -113,11 +110,9 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
       setError("");
       setMessage("");
 
-      const token = localStorage.getItem("fmc-auth-token");
       const response = await fetch(`/api/admin/users/${selectedUser.id}/permissions`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -158,12 +153,8 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
       setError("");
       setMessage("");
 
-      const token = localStorage.getItem("fmc-auth-token");
       const response = await fetch(`/api/admin/users/${selectedUser.id}/deactivate`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token || ""}`,
-        },
       });
 
       if (!response.ok) {
@@ -206,11 +197,9 @@ export default function UserManagementPanel({ onRefresh }: UserManagementPanelPr
       setError("");
       setMessage("");
 
-      const token = localStorage.getItem("fmc-auth-token");
       const response = await fetch("/api/admin/users", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

@@ -2,11 +2,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import imageCompression from "browser-image-compression";
-import { getCurrentUser } from "@/lib/jwt";
 import { Permission, UserRole } from "@/types";
 
 export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?: number | string | null; editingId?: number | string | null; onSuccess?: () => void }) {
+  const { data: session } = useSession();
   const currentId = editingId ?? eventId ?? null;
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -17,27 +18,15 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
   const [existingCover, setExistingCover] = useState<string | null>(null);
   const [existingHeroImage, setExistingHeroImage] = useState<string | null>(null);
 
-  // Get auth token from localStorage
-  const getAuthToken = () => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("fmc-auth-token") || "";
-    }
-    return "";
-  };
-
   useEffect(() => {
     async function load() {
       if (!currentId) return;
       setStatus("Loading event...");
       try {
-        const token = getAuthToken();
-        const loadRes = await fetch(`/api/admin/events?id=${encodeURIComponent(String(currentId))}`, { 
+        const loadRes = await fetch(`/api/admin/events?id=${encodeURIComponent(String(currentId))}`, {
           method: "GET",
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
         });
-        
+
         if (!loadRes.ok) {
           setStatus(`Failed to load: ${loadRes.status}`);
           return;
@@ -79,17 +68,12 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
     }
 
     try {
-      const token = getAuthToken();
-      if (!token) {
+      if (!session?.user) {
         setStatus("Unauthorized. Please log in again.");
         return;
       }
 
-      const user = getCurrentUser();
-      if (!user) {
-        setStatus("Unauthorized. Please log in again.");
-        return;
-      }
+      const user = session.user;
       const isSupreme = user.role === UserRole.HEAD || user.role === UserRole.CO_HEAD;
       const canAdd = user.permissions?.includes(Permission.CAN_ADD_EVENTS);
       const canEdit = user.permissions?.includes(Permission.CAN_EDIT_EVENTS);
@@ -98,12 +82,11 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         setStatus("Unauthorized. You don't have permission to manage events.");
         return;
       }
-      
+
       const slugRes = await fetch("/api/admin/events/check-slug", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ slug, excludeId: currentId }),
       });
@@ -139,12 +122,9 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
         const fd = new FormData();
         fd.append("file", file);
         fd.append("dir", dir);
-        const res = await fetch("/api/upload", { 
-          method: "POST", 
-          headers: {
-            "Authorization": `Bearer ${token}`
-          },
-          body: fd 
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: fd
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
@@ -186,9 +166,8 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
 
       const eventRes = await fetch("/api/admin/events", {
         method: currentId ? "PUT" : "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify(currentId ? { id: currentId, ...payload } : payload),
       });
@@ -204,11 +183,8 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       }
 
       setStatus(currentId ? "SUCCESS! Event updated" : "SUCCESS! Event added — refresh homepage");
-      await fetch("/api/revalidate?path=/", { 
+      await fetch("/api/revalidate?path=/", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
       });
       if (onSuccess) onSuccess();
 

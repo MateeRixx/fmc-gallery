@@ -3,8 +3,7 @@
 // src/components/Navbar.tsx
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { getCurrentUser, clearToken } from "@/lib/jwt";
+import { useSession, signOut } from "next-auth/react";
 
 type NavbarProps = {
   onEventsClick?: () => void;
@@ -13,24 +12,10 @@ type NavbarProps = {
 
 export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: session, status } = useSession();
 
-  useEffect(() => {
-    try {
-      const user = getCurrentUser();
-      setCurrentUser(user);
-    } catch {
-      // Silent fail
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleLogout = () => {
-    clearToken();
-    setCurrentUser(null);
-    router.push("/");
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: "/login" });
   };
 
   const handleEventsClick = () => {
@@ -92,16 +77,16 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
           </div>
 
           <div className="flex items-center space-x-6">
-            {!isLoading && currentUser ? (
+            {session?.user ? (
               <>
                 <div className="flex items-center gap-3 bg-purple-600/30 px-4 py-2 rounded-full border border-purple-500/50">
                   <div className="w-8 h-8 bg-linear-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
                     <span className="text-white font-bold text-sm">
-                      {currentUser.email.charAt(0).toUpperCase()}
+                      {session.user.email?.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <span className="text-white text-sm font-semibold hidden sm:inline">
-                    {currentUser.email.split("@")[0]}
+                    {session.user.email?.split("@")[0]}
                   </span>
                 </div>
                 <Link

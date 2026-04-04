@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
+import { ClusterPhotosSchema, validationErrorResponse } from "@/lib/validate";
+import { z } from "zod";
 
-export async function GET(
+async function handler(
   request: Request,
   { params }: { params: Promise<{ clusterId: string }> }
 ) {
@@ -20,7 +23,23 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const eventId = searchParams.get("event_id");
+
+    // Validate query parameters
+    let validated;
+    try {
+      validated = ClusterPhotosSchema.parse({
+        limit: searchParams.get("limit") || undefined,
+        offset: searchParams.get("offset") || undefined,
+        event_id: searchParams.get("event_id") || undefined,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationErrorResponse(error);
+      }
+      throw error;
+    }
+
+    const { limit, offset, event_id: eventId } = validated;
 
     let query = supabase
       .from("face_embeddings")
@@ -56,13 +75,19 @@ export async function GET(
 
     const photoIds = Array.from(bestByPhoto.keys());
     if (!photoIds.length) {
-      return Response.json({ ok: true, cluster_id: clusterId, photos: [] });
+      return Response.json({ ok: true, cluster_id: clusterId, photos: [], pagination: { limit, offset, returned: 0 } });
     }
+
+    // Get total count for pagination
+    const totalCount = photoIds.length;
+
+    // Apply offset-based pagination
+    const paginatedPhotoIds = photoIds.slice(offset, offset + limit);
 
     const { data: photos, error: photosError } = await supabase
       .from("photos")
       .select("id, path, event_id")
-      .in("id", photoIds);
+      .in("id", paginatedPhotoIds);
 
     if (photosError) {
       return Response.json({ error: photosError.message }, { status: 500 });
@@ -102,10 +127,20 @@ export async function GET(
       ok: true,
       cluster_id: clusterId,
       count: responsePhotos.length,
+      total_count: totalCount,
       photos: responsePhotos,
+      pagination: { limit, offset, returned: responsePhotos.length },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to load person photos";
     return Response.json({ error: msg }, { status: 500 });
   }
 }
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ clusterId: string }> }
+) {
+  return handler(request, { params });
+}
+

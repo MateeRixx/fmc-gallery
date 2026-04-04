@@ -1,10 +1,10 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { requireAuth } from "@/lib/middleware";
+import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
 
 export async function POST(request: Request) {
-  const authResult = await requireAuth(request);
+  const authResult = await requireAuthCompat(request);
   if (authResult instanceof Response) return authResult;
   const canManage =
     isSupremeAdmin(authResult.role) ||

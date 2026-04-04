@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
+import { FaceSearchSchema, validationErrorResponse } from "@/lib/validate";
+import { z } from "zod";
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,44 +13,42 @@ export async function POST(request: Request) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await request.json();
-    const embedding = body?.embedding as number[] | undefined;
-    const eventId = body?.event_id as string | null | undefined;
-    const threshold = Number(body?.threshold ?? 0.35);
-    const limit = Number(body?.limit ?? 60);
 
-    if (!Array.isArray(embedding) || embedding.length !== 128) {
-      return Response.json({ error: "embedding(128) is required" }, { status: 400 });
+    // Validate with Zod
+    let validated;
+    try {
+      validated = FaceSearchSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationErrorResponse(error);
+      }
+      throw error;
     }
 
-    if (Number.isNaN(threshold) || threshold <= 0) {
-      return Response.json({ error: "threshold must be a positive number" }, { status: 400 });
-    }
-
-    if (Number.isNaN(limit) || limit <= 0 || limit > 200) {
-      return Response.json({ error: "limit must be between 1 and 200" }, { status: 400 });
-    }
+    const { query: embedding, event_id: eventId, limit, offset, threshold } = validated;
 
     const vector = `[${embedding.join(",")}]`;
 
+    // Fetch results with limit + offset handling
     const { data, error } = await supabase.rpc("search_similar_faces", {
       query_embedding: vector,
       filter_event_id: eventId ?? null,
       match_threshold: threshold,
-      match_limit: limit,
+      match_limit: limit + offset, // Fetch extra to handle offset
     });
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (data || []) as Array<{
+    const rows = ((data || []) as Array<{
       face_id: number;
       photo_id: string;
       event_id: string;
       bbox: { x: number; y: number; width: number; height: number };
       photo_url: string;
       similarity: number;
-    }>;
+    }>).slice(offset, offset + limit); // Apply offset
 
     const uniqueEventIds = Array.from(new Set(rows.map((row) => row.event_id))).filter(Boolean);
 
@@ -79,9 +80,21 @@ export async function POST(request: Request) {
       };
     });
 
-    return Response.json({ ok: true, results: enriched });
+    return Response.json({
+      ok: true,
+      results: enriched,
+      pagination: {
+        limit,
+        offset,
+        returned: enriched.length,
+      },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Search failed";
     return Response.json({ error: msg }, { status: 500 });
   }
 }
+
+// Apply rate limiting: 100 requests per minute per IP
+export const POST = rateLimit(handler, rateLimitConfigs.standard);
+

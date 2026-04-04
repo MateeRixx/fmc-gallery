@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { MASTER_EMAIL } from "@/lib/config";
+import GoogleSignUpButton from "./GoogleSignUpButton";
 
 interface SignUpFormProps {
-  onOTPNeeded: (email: string, fullName: string, role: string) => void;
+  onSuccess?: () => void;
 }
 
-export default function SignUpForm({ onOTPNeeded }: SignUpFormProps) {
+export default function SignUpForm({ onSuccess }: SignUpFormProps) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("member");
   const [invitationToken, setInvitationToken] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
 
   const isMaster = email.toLowerCase().trim() === MASTER_EMAIL.toLowerCase();
   const requiresInvitation = (role === "head" || role === "co_head") && !isMaster;
@@ -43,6 +46,7 @@ export default function SignUpForm({ onOTPNeeded }: SignUpFormProps) {
     setStatus("Creating account...");
 
     try {
+      // Step 1: Validate role/invitation and create user account
       const payload: any = {
         email: normalized_email,
         full_name: fullName.trim(),
@@ -53,29 +57,45 @@ export default function SignUpForm({ onOTPNeeded }: SignUpFormProps) {
         payload.invitation_token = invitationToken.trim();
       }
 
-      const response = await fetch("/api/auth/register", {
+      const registerResponse = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const registerData = await registerResponse.json();
 
-      if (!response.ok) {
-        setStatus(`❌ ${data.error || "Registration failed"}`);
+      if (!registerResponse.ok) {
+        setStatus(`❌ ${registerData.error || "Registration failed"}`);
         setLoading(false);
         return;
       }
 
-      if (data.success) {
-        setStatus("✓ OTP sent to your email!");
-        setTimeout(() => {
-          onOTPNeeded(normalized_email, fullName, role);
-        }, 500);
-      } else {
-        setStatus("❌ Registration failed");
+      // Step 2: Send magic link via NextAuth email provider
+      const signInResult = await signIn("email", {
+        email: normalized_email,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
+        setStatus(`❌ Could not send sign-in link: ${signInResult.error}`);
         setLoading(false);
+        return;
       }
+
+      // Success!
+      setStatus("✓ Account created! Check your email for the sign-in link.");
+      setLinkSent(true);
+      setEmail("");
+      setFullName("");
+      setRole("member");
+      setInvitationToken("");
+      setLoading(false);
+
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        setStatus("");
+      }, 5000);
     } catch (err) {
       console.error("Registration error:", err);
       setStatus("❌ Connection error. Please try again.");
@@ -163,10 +183,36 @@ export default function SignUpForm({ onOTPNeeded }: SignUpFormProps) {
       </button>
 
       {status && (
-        <div className="p-3 rounded-lg bg-white/10 border border-white/20 text-center text-sm text-gray-200">
+        <div
+          className={`p-3 rounded-lg border text-center text-sm ${
+            linkSent
+              ? "bg-green-500/20 border-green-500/50 text-green-200"
+              : "bg-white/10 border-white/20 text-gray-200"
+          }`}
+        >
           {status}
         </div>
       )}
+
+      {linkSent && (
+        <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-200 text-xs">
+          <p className="font-semibold mb-2">📧 What's next?</p>
+          <p>We sent a sign-in link to your email address.</p>
+          <p className="mt-2">Click the link to sign in instantly. No password or OTP needed!</p>
+          <p className="mt-2 text-blue-300">Link expires in 24 hours.</p>
+        </div>
+      )}
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-white/20"></div>
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="px-2 bg-black text-gray-400">or sign up with Google</span>
+        </div>
+      </div>
+
+      <GoogleSignUpButton variant="signup" fullWidth />
     </form>
   );
 }

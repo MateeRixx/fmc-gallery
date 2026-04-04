@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requirePermission } from "@/lib/middleware";
+import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
 import {
   cosineDistance,
@@ -9,6 +9,7 @@ import {
   vectorToPgString,
 } from "@/lib/faceClusters";
 import { searchFacesByFaceId } from "@/lib/awsRekognition";
+import { revalidateAllClusters } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes
@@ -259,12 +260,13 @@ async function runAwsClusteringGlobal(params: {
   } = { merged_clusters: 0 };
 
   if (createdClusterIds.length > 80) {
+    const skipReason = `Skipped duplicate merge for ${createdClusterIds.length} clusters to keep reclustering stable`;
     mergeResult = {
       merged_clusters: 0,
       skipped: true,
-      reason: `Skipped duplicate merge for ${createdClusterIds.length} clusters to keep reclustering stable`,
+      reason: skipReason,
     };
-    onProgress?.(mergeResult.reason);
+    onProgress?.(skipReason);
   } else {
     onProgress?.(`Pass 3: Checking for duplicate clusters...`);
     try {
@@ -383,7 +385,7 @@ async function mergeDuplicateClusters(params: {
             maxFaces: 50,
           });
 
-          const matchedFaceIds = new Set(matches.map(m => m.awsFaceId));
+          const matchedFaceIds = new Set(matches.map((m: { awsFaceId: string; similarity: number }) => m.awsFaceId));
 
           for (const faceB of facesB) {
             if (matchedFaceIds.has(faceB.aws_face_id)) {
@@ -549,7 +551,7 @@ async function detectAndMergeOverlappingClusters(params: {
           maxFaces: 50,
         });
 
-        const matchesInB = matches.filter((m) => facesB.includes(m.awsFaceId));
+        const matchesInB = matches.filter((m: { awsFaceId: string; similarity: number }) => facesB.includes(m.awsFaceId));
 
         // If significant overlap (>20% of smaller cluster), merge
         const overlapRatio = matchesInB.length / Math.min(facesA.length, facesB.length);
@@ -810,7 +812,7 @@ export async function mergeNewFacesIntoExistingClusters(params: {
       }
 
       // Find which existing clusters these matches belong to
-      const matchedAwsFaceIds = matches.map((m) => m.awsFaceId);
+      const matchedAwsFaceIds = matches.map((m: { awsFaceId: string; similarity: number }) => m.awsFaceId);
 
       const { data: matchedFaces, error: matchError } = await supabase
         .from("face_embeddings")
@@ -962,7 +964,7 @@ export async function auditClusterQuality(params: {
         maxFaces: 50,
       });
 
-      const matchesInsideCluster = matches.filter((m) =>
+      const matchesInsideCluster = matches.filter((m: { awsFaceId: string; similarity: number }) =>
         awsFaceIds.includes(m.awsFaceId) && m.awsFaceId !== face.aws_face_id
       );
 
@@ -1317,7 +1319,7 @@ async function runVectorClustering(params: {
 // ============================================================================
 
 export async function POST(request: NextRequest) {
-  const user = await requirePermission(request, Permission.CAN_UPLOAD_PHOTOS);
+  const user = await requirePermissionCompat(request, Permission.CAN_UPLOAD_PHOTOS);
   if (user instanceof Response) return user;
 
   try {
@@ -1428,6 +1430,9 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    // Revalidate all cluster pages after reclustering completes
+    await revalidateAllClusters();
 
     return Response.json({
       ok: true,

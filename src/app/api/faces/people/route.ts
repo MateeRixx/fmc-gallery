@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
+import { ClusterQuerySchema, validationErrorResponse } from "@/lib/validate";
+import { z } from "zod";
 
-export async function GET(request: Request) {
+async function handler(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -11,8 +14,23 @@ export async function GET(request: Request) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const { searchParams } = new URL(request.url);
 
-    const eventId = searchParams.get("event_id");
-    const limit = Math.max(1, Math.min(300, Number(searchParams.get("limit") || "120")));
+    // Validate query parameters
+    let validated;
+    try {
+      validated = ClusterQuerySchema.parse({
+        event_id: searchParams.get("event_id") || undefined,
+        limit: searchParams.get("limit") || undefined,
+        offset: searchParams.get("offset") || undefined,
+        sort: searchParams.get("sort") || undefined,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return validationErrorResponse(error);
+      }
+      throw error;
+    }
+
+    const { event_id: eventId, limit, offset, sort } = validated;
 
     if (eventId) {
       const { data: eventFaces, error: eventFacesError } = await supabase
@@ -38,7 +56,7 @@ export async function GET(request: Request) {
 
       const clusterIds = Array.from(byCluster.keys());
       if (!clusterIds.length) {
-        return Response.json({ ok: true, people: [] });
+        return Response.json({ ok: true, people: [], pagination: { limit, offset, returned: 0 } });
       }
 
       const sortedClusterIds = clusterIds.sort((a, b) => {
@@ -47,7 +65,8 @@ export async function GET(request: Request) {
         return bCount - aCount;
       });
 
-      const effectiveClusterIds = sortedClusterIds.slice(0, limit);
+      // Apply offset-based pagination
+      const effectiveClusterIds = sortedClusterIds.slice(offset, offset + limit);
       const { data: clusterRows, error: clusterError } = await supabase
         .from("face_clusters")
         .select("id, face_count, cover_photo_id, cover_face_id, updated_at")
@@ -120,14 +139,14 @@ export async function GET(request: Request) {
         };
       });
 
-      return Response.json({ ok: true, people });
+      return Response.json({ ok: true, people, pagination: { limit, offset, returned: people.length } });
     }
 
     const { data: clusters, error: clusterError } = await supabase
       .from("face_clusters")
       .select("id, face_count, cover_photo_id, cover_face_id, updated_at")
       .order("face_count", { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (clusterError) {
       return Response.json({ error: clusterError.message }, { status: 500 });
@@ -202,9 +221,12 @@ export async function GET(request: Request) {
       };
     });
 
-    return Response.json({ ok: true, people });
+    return Response.json({ ok: true, people, pagination: { limit, offset, returned: people.length } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to load people";
     return Response.json({ error: msg }, { status: 500 });
   }
 }
+
+// Apply rate limiting: 100 requests per minute per IP
+export const GET = rateLimit(handler, rateLimitConfigs.standard);

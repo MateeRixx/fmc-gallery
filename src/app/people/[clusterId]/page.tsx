@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import PhotoModal from "@/components/PhotoModal";
-import { getCurrentUser } from "@/lib/jwt";
 import { Permission } from "@/types";
 
 type PersonPhoto = {
@@ -20,7 +20,7 @@ type PersonPhoto = {
 export default function PersonDetailPage() {
   const params = useParams<{ clusterId: string }>();
   const clusterId = params?.clusterId || "";
-  const [user] = useState(getCurrentUser());
+  const { data: session } = useSession();
 
   const [photos, setPhotos] = useState<PersonPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,8 +30,8 @@ export default function PersonDetailPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<PersonPhoto | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const canDelete = user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS) ||
-                   user?.role === 'head' || user?.role === 'co_head';
+  const canDelete = session?.user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS) ||
+                   session?.user?.role === 'head' || session?.user?.role === 'co_head';
 
   const loadPhotos = async () => {
     setLoading(true);

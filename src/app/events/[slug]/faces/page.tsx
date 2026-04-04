@@ -31,6 +31,7 @@ export default function EventFacesPage({ params }: { params: Promise<{ slug: str
         const { data: ev, error: evError } = await supabase
           .from("events")
           .select("id, title")
+          .neq("slug", "profile-photos")
           .eq("slug", slug)
           .maybeSingle();
 

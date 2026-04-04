@@ -10,7 +10,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requireSupremeAdmin } from "@/lib/middleware";
+import { requireSupremeAdmin } from "@/lib/auth-utils";
 import { UserRole, RoleChangeResponse } from "@/types";
 
 export async function POST(

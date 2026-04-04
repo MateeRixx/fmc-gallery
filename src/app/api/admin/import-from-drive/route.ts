@@ -9,11 +9,12 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/middleware";
+import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
 import { indexFacesFromImageBytes } from "@/lib/awsRekognition";
 import { mergeNewFacesIntoExistingClusters } from "@/app/api/admin/faces/recluster/route";
+import sharp from "sharp";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
@@ -88,7 +89,7 @@ function getGoogleDriveApiKey() {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth(request);
+  const authResult = await requireAuthCompat(request);
   if (authResult instanceof Response) return authResult;
 
   const canUpload = isSupremeAdmin(authResult.role) || hasPermission(authResult, Permission.CAN_UPLOAD_PHOTOS);
@@ -169,13 +170,25 @@ export async function POST(request: NextRequest) {
           const progress = Math.round(((i + 1) / total) * 100);
 
           try {
-            const buffer = await downloadDriveFile(file.id, driveApiKey.value);
-            const ext = file.name.split(".").pop() || "jpg";
-            const storagePath = `${event_slug}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const arrayBuffer = await downloadDriveFile(file.id, driveApiKey.value); 
+            const buffer = Buffer.from(arrayBuffer);
+
+            // Compress using sharp
+            const compressedBuffer = await sharp(buffer)
+              .resize(1920, 1920, {
+                fit: 'inside',
+                withoutEnlargement: true
+              })
+              .jpeg({ quality: 75, mozjpeg: true })
+              .toBuffer();
+
+            const finalExt = "jpg";
+            const finalMime = "image/jpeg";
+            const storagePath = `${event_slug}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${finalExt}`;
 
             const { error: uploadError } = await supabase.storage
               .from("event-images")
-              .upload(storagePath, buffer, { contentType: file.mimeType });
+              .upload(storagePath, compressedBuffer, { contentType: finalMime });     
 
             if (uploadError) {
               errors.push(`${file.name}: ${uploadError.message}`);

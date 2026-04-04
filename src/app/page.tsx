@@ -55,6 +55,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from("events")
           .select("id, slug, title, description, starts_at, cover_url")
+          .neq("slug", "profile-photos")
           .order("id", { ascending: true });
 
         if (error) {

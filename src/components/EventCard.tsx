@@ -35,6 +35,7 @@ export default function EventCard({ event, isActive = false }: Props) {
           fill
           sizes="(max-width: 640px) 100vw, 28rem"
           quality={80}
+          unoptimized
           className="object-cover brightness-50 group-hover:brightness-75 transition"
         />
 

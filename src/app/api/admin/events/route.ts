@@ -1,7 +1,8 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextRequest } from "next/server";
-import { requireSupremeAdmin } from "@/lib/middleware";
+import { requireExecutiveCompat } from "@/lib/auth-utils";
+import { revalidateEvent } from "@/lib/cache";
 
 function normalizeId(raw: unknown): string | number | null {
   if (raw === null || raw === undefined) return null;
@@ -42,7 +43,7 @@ function getSupabaseWrite() {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await requireSupremeAdmin(request);
+  const user = await requireExecutiveCompat(request);
   if (user instanceof Response) return user;
 
   try {
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from("events")
       .select("id, title")
+      .neq("slug", "profile-photos")
       .order("id", { ascending: true });
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await requireSupremeAdmin(request);
+  const user = await requireExecutiveCompat(request);
   if (user instanceof Response) return user;
 
   try {
@@ -123,6 +125,13 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("Successfully inserted event:", data);
+
+    // Revalidate cache after event creation
+    if (data && data.length > 0) {
+      const event = data[0];
+      await revalidateEvent(String(event.id), event.slug);
+    }
+
     return Response.json({ ok: true, data });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Insert failed";
@@ -132,7 +141,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const user = await requireSupremeAdmin(request);
+  const user = await requireExecutiveCompat(request);
   if (user instanceof Response) return user;
 
   try {
@@ -157,6 +166,11 @@ export async function PUT(request: NextRequest) {
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
+
+    // Revalidate cache after event update
+    const newSlug = typeof updates.slug === "string" ? updates.slug : slug;
+    await revalidateEvent(String(id), newSlug);
+
     return Response.json({ ok: true });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Update failed";
@@ -166,7 +180,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await requireSupremeAdmin(request);
+  const user = await requireExecutiveCompat(request);
   if (user instanceof Response) return user;
 
   try {
@@ -189,6 +203,10 @@ export async function DELETE(request: NextRequest) {
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
+
+    // Revalidate cache after event deletion
+    await revalidateEvent(String(id));
+
     return Response.json({ ok: true });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Delete failed";

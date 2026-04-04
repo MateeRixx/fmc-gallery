@@ -2,32 +2,16 @@
  * API Route: GET /api/admin/invitations
  *
  * Get list of invitations created by the current user
- * Requires authentication (Bearer token)
+ * Requires authentication
  */
 
-import { verifyJWT, extractTokenFromHeader } from "@/lib/jwt";
+import { requireAuth } from "@/lib/auth-utils";
 import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
   try {
     // ===== AUTHENTICATION =====
-    const auth_header = request.headers.get("authorization");
-    const token = extractTokenFromHeader(auth_header);
-
-    if (!token) {
-      return Response.json(
-        { error: "Authorization header required" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyJWT(token);
-    if (!decoded) {
-      return Response.json(
-        { error: "Invalid or expired token" },
-        { status: 401 }
-      );
-    }
+    const user = await requireAuth();
 
     // ===== GET INVITATIONS =====
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,7 +30,7 @@ export async function GET(request: Request) {
     const { data: invitations, error } = await supabase
       .from("invitations")
       .select("*")
-      .eq("created_by", decoded.sub)
+      .eq("created_by", user.email)
       .order("created_at", { ascending: false })
       .limit(50);
 

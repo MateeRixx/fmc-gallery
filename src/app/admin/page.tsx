@@ -10,6 +10,7 @@ export default async function AdminPage() {
     const { data, error } = await supabase
       .from("events")
       .select("id, title, slug")
+      .neq("slug", "profile-photos")
       .order("id", { ascending: true });
     
     if (error) {

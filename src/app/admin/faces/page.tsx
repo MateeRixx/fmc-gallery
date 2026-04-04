@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import FaceSearchPanel from "@/components/faces/FaceSearchPanel";
-import { getCurrentUser } from "@/lib/jwt";
 
 type UnprocessedPhoto = {
   id: string;
@@ -13,14 +13,21 @@ type UnprocessedPhoto = {
 
 export default function AdminFacesPage() {
   const router = useRouter();
-  const [user, setUser] = useState(getCurrentUser());
+  const { data: session, status } = useSession();
   const [hydrated, setHydrated] = useState(false);
   const [eventId, setEventId] = useState("");
   const [threshold, setThreshold] = useState(0.35);
   const [minQuality, setMinQuality] = useState(0.45);
   const [running, setRunning] = useState(false);
-  const [status, setStatus] = useState("");
+  const [clusterStatus, setClusterStatus] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
 
   // Process existing photos state
   const [processing, setProcessing] = useState(false);
@@ -42,10 +49,7 @@ export default function AdminFacesPage() {
 
   const loadStats = async () => {
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
-      const response = await fetch("/api/admin/faces/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetch("/api/admin/faces/stats");
       const data = await response.json();
       if (response.ok) {
         setStats(data.stats);
@@ -56,22 +60,20 @@ export default function AdminFacesPage() {
   };
 
   useEffect(() => {
-    if (hydrated && user) {
+    if (hydrated && session?.user) {
       loadStats();
     }
-  }, [hydrated, user]);
+  }, [hydrated, session?.user]);
 
   const runRecluster = async () => {
     setRunning(true);
-    setStatus("Rebuilding people clusters...");
+    setClusterStatus("Rebuilding people clusters...");
 
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
       const response = await fetch("/api/admin/faces/recluster", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           threshold,
@@ -82,29 +84,27 @@ export default function AdminFacesPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        setStatus(`Failed: ${data.error || "Unknown error"}`);
+        setClusterStatus(`Failed: ${data.error || "Unknown error"}`);
         return;
       }
 
-      setStatus(
+      setClusterStatus(
         `Done. Processed ${data.processed_faces} faces, created ${data.created_clusters} clusters, total ${data.total_clusters} clusters.`
       );
       loadStats(); // Refresh stats
     } catch (error) {
       console.error("Reclustering failed:", error);
-      setStatus("Reclustering failed due to a network or server error.");
+      setClusterStatus("Reclustering failed due to a network or server error.");
     } finally {
       setRunning(false);
     }
   };
 
   const runClusteringOnly = async () => {
-    const token = localStorage.getItem("fmc-auth-token") || "";
     const response = await fetch("/api/admin/faces/recluster", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         threshold,
@@ -126,10 +126,9 @@ export default function AdminFacesPage() {
 
   const testThresholds = async () => {
     setRunning(true);
-    setStatus("Testing different thresholds...");
+    setClusterStatus("Testing different thresholds...");
 
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
       const thresholds = [0.2, 0.3, 0.35, 0.4, 0.5, 0.6];
       const results: string[] = [];
 
@@ -138,7 +137,6 @@ export default function AdminFacesPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             threshold: t,
@@ -161,14 +159,14 @@ export default function AdminFacesPage() {
         }
       }
 
-      setStatus(
+      setClusterStatus(
         `Results:\n${results.join(
           "\n"
         )}\n\nCheck browser console (F12) for detailed distance logs.\nChoose the best threshold and set it above, then click "Run Full Reclustering"`
       );
       loadStats();
     } catch (error) {
-      setStatus("Test failed: " + (error instanceof Error ? error.message : String(error)));
+      setClusterStatus("Test failed: " + (error instanceof Error ? error.message : String(error)));
     } finally {
       setRunning(false);
     }
@@ -180,12 +178,8 @@ export default function AdminFacesPage() {
     setProcessProgress({ current: 0, total: 0 });
 
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
-
       // Fetch photos without face embeddings
-      const listResponse = await fetch("/api/admin/faces/unprocessed?limit=500&mode=aws", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const listResponse = await fetch("/api/admin/faces/unprocessed?limit=500&mode=aws");
 
       const listData = await listResponse.json();
       if (!listResponse.ok) {
@@ -199,10 +193,7 @@ export default function AdminFacesPage() {
 
       if (photos.length === 0) {
         // Check if we need to run clustering on existing embeddings
-        const token = localStorage.getItem("fmc-auth-token") || "";
-        const statsResponse = await fetch("/api/admin/faces/stats", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const statsResponse = await fetch("/api/admin/faces/stats");
         const statsData = await statsResponse.json();
 
         if (statsResponse.ok && statsData.stats) {
@@ -234,7 +225,6 @@ export default function AdminFacesPage() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
               photos: [
@@ -290,7 +280,6 @@ export default function AdminFacesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           threshold,
@@ -330,7 +319,7 @@ export default function AdminFacesPage() {
     );
   }
 
-  if (!user) {
+  if (!session?.user) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -440,7 +429,7 @@ export default function AdminFacesPage() {
             </button>
           </div>
 
-          {status && <p className="text-sm text-yellow-200">{status}</p>}
+          {status && <p className="text-sm text-yellow-200">{clusterStatus}</p>}
         </div>
 
         <div className="rounded-xl border border-white/15 bg-white/5 p-5 space-y-4">

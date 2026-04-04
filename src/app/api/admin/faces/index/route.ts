@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requirePermission } from "@/lib/middleware";
+import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
 
 type FacePayload = {
@@ -12,7 +12,7 @@ type FacePayload = {
 };
 
 export async function POST(request: NextRequest) {
-  const user = await requirePermission(request, Permission.CAN_UPLOAD_PHOTOS);
+  const user = await requirePermissionCompat(request, Permission.CAN_UPLOAD_PHOTOS);
   if (user instanceof Response) return user;
 
   try {

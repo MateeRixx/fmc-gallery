@@ -9,6 +9,7 @@
     "lint": "eslint . --ext .js,.ts,.tsx"
   },
   "dependencies": {
+    "@auth/supabase-adapter": "^1.11.1",
     "@aws-sdk/client-rekognition": "^3.1013.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.87.1",
@@ -18,9 +19,12 @@
     "framer-motion": "^12.23.24",
     "jszip": "^3.10.1",
     "next": "^16.0.10",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "resend": "^6.9.4",
+    "sharp": "^0.34.5",
     "swiper": "^12.0.3"
   },
   "devDependencies": {
@@ -28,10 +32,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "baseline-browser-mapping": "^2.9.18",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
-    "supabase": "^2.84.0",
+    "supabase": "^2.84.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

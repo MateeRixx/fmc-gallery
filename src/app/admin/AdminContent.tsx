@@ -2,16 +2,21 @@
 import React, { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Event, UserRole } from "@/types";
-import { getCurrentUser, clearToken } from "@/lib/jwt";
+import { Event } from "@/types";
+import { useSession, signOut } from "next-auth/react";
 
 const AdminForm = dynamic(() => import("@/components/AdminForm"), {
   loading: () => <div className="text-center text-gray-400">Loading form...</div>,
   ssr: false
 });
 
-const UserManagementPanel = dynamic(() => import("@/components/UserManagementPanel"), {
-  loading: () => <div className="text-center text-gray-400">Loading user management...</div>,
+const MemberManagementPanel = dynamic(() => import("@/components/MemberManagementPanel"), {
+  loading: () => <div className="text-center text-gray-400">Loading member management...</div>,
+  ssr: false
+});
+
+const InviteSendForm = dynamic(() => import("@/components/InviteSendForm"), {
+  loading: () => <div className="text-center text-gray-400">Loading invite form...</div>,
   ssr: false
 });
 
@@ -19,46 +24,29 @@ type AdminEvent = Pick<Event, 'id' | 'title' | 'slug'>;
 
 export default function AdminContent({ events: initial }: { events: AdminEvent[] }) {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { data: session, status } = useSession();
   const [events, setEvents] = useState<AdminEvent[]>(initial);
   const [editingId, setEditingId] = useState<number | string | null>(null);
-  
+
   useEffect(() => {
-    try {
-      const user = getCurrentUser();
-      setCurrentUser(user);
-      if (!user) {
-        clearToken();
-        router.replace("/login");
-        return;
-      }
-      // Token valid, continue
-    } catch (err) {
-      console.error("Auth check failed:", err);
-      clearToken();
+    // Redirect to login if not authenticated
+    if (status === "unauthenticated") {
       router.replace("/login");
     }
-  }, [router]);
+  }, [status, router]);
 
   useEffect(() => {
     fetchEvents();
   }, []);
   async function fetchEvents() {
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-      const res = await fetch("/api/admin/events", { 
+      // NextAuth handles session via HttpOnly cookies, no need to pass token
+      const res = await fetch("/api/admin/events", {
         method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
       });
       if (res.status === 401 || res.status === 403) {
-        clearToken();
-        router.replace("/login");
+        // Unauthorized - session likely expired, redirect to login
+        await signOut({ redirect: true, callbackUrl: "/login" });
         return;
       }
       if (!res.ok) {
@@ -75,12 +63,8 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
   }
   async function deleteEvent(id: number | string) {
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
-      const res = await fetch(`/api/admin/events?id=${encodeURIComponent(String(id))}`, { 
+      const res = await fetch(`/api/admin/events?id=${encodeURIComponent(String(id))}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
       });
       if (res.ok) {
         fetchEvents();
@@ -98,17 +82,16 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
             <div className="flex items-center bg-purple-600/20 border border-purple-500/50 rounded-full px-4 py-2">
               <div className="w-2 h-2 bg-green-400 rounded-full mr-2" />
               <span className="text-sm text-gray-300">
-                {currentUser?.email}
+                {session?.user?.email}
               </span>
               <span className="text-xs text-purple-400 ml-3 px-2 py-1 bg-purple-500/20 rounded-full">
-                {currentUser?.role}
+                {session?.user?.role}
               </span>
             </div>
           </div>
           <button
-            onClick={() => {
-              clearToken();
-              router.replace("/login");
+            onClick={async () => {
+              await signOut({ redirect: true, callbackUrl: "/login" });
             }}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600/20 hover:bg-red-600/40 border border-red-500/50 rounded-lg transition"
             title="Sign out"
@@ -133,13 +116,24 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
         </div>
 
         {/* User Management Section - Only for Head and Co-Head */}
-        {currentUser && (currentUser.role === UserRole.HEAD || currentUser.role === UserRole.CO_HEAD) && (
-          <div className="mb-12 bg-gray-900 p-8 rounded-lg">
-            <h2 className="text-3xl font-bold mb-6">User Management</h2>
-            <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading user management...</div>}>
-              <UserManagementPanel />
-            </Suspense>
-          </div>
+        {session?.user && ((session.user as any)?.roleLevel >= 2) && (
+          <>
+            {/* Send Invitations */}
+            <div className="mb-12 bg-gray-900 p-8 rounded-lg">
+              <h2 className="text-3xl font-bold mb-6">Send Invitations</h2>
+              <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading form...</div>}>
+                <InviteSendForm />
+              </Suspense>
+            </div>
+
+            {/* Member Management */}
+            <div className="mb-12 bg-gray-900 p-8 rounded-lg">
+              <h2 className="text-3xl font-bold mb-6">Manage Members</h2>
+              <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading members...</div>}>
+                <MemberManagementPanel />
+              </Suspense>
+            </div>
+          </>
         )}
 
         {/* Existing Events Section */}

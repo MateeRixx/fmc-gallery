@@ -3,6 +3,7 @@ import {
   IndexFacesCommand,
   RekognitionClient,
   SearchFacesCommand,
+  SearchFacesCommandOutput,
 } from "@aws-sdk/client-rekognition";
 
 const awsRegion = process.env.AWS_REGION || "us-east-1";
@@ -107,7 +108,7 @@ export async function searchFacesByFaceId(params: {
   maxFaces?: number;
 }) {
   const rekognition = createRekognitionClient();
-  let response;
+  let response: SearchFacesCommandOutput | undefined;
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -133,6 +134,10 @@ export async function searchFacesByFaceId(params: {
 
       await new Promise((resolve) => setTimeout(resolve, attempt * 250));
     }
+  }
+
+  if (!response) {
+    throw new Error("Failed to get response from AWS Rekognition after retries");
   }
 
   return (response.FaceMatches || [])

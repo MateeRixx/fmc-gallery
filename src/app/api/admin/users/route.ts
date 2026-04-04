@@ -7,7 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requireSupremeAdmin } from "@/lib/middleware";
+import { requireSupremeAdmin } from "@/lib/auth-utils";
 import { Permission, User, UserRole } from "@/types";
 
 export async function GET(request: NextRequest) {

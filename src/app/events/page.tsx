@@ -1,73 +1,49 @@
 // src/app/events/page.tsx
-"use client";
 
-import { useState, useEffect } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
-
+import { createClient } from "@supabase/supabase-js";
 import Navbar from "@/components/Navbar";
 import EventCard from "@/components/EventCard";
-import {supabase} from "@/lib/supabase";
-import { Event } from "@/types";
+import { type Event } from "@/types";
 
+// ISR: Revalidate every 1 hour (3600 seconds)
+export const revalidate = 3600;
 
-export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [activeEvent, setActiveEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
+async function getEvents(): Promise<Event[]> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  useEffect(() => {
-    async function fetchEvents() {
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        setConfigError("Supabase is not configured");
-        setLoading(false);
-        return;
-      }
-      const { data, error } = await supabase
-        .from("events")
-        .select("id, slug, title, description, cover_url, starts_at")
-        .order("id", { ascending: true });
-
-      if (error) {
-        console.error("Error fetching events:", error);
-      } else {
-        setEvents(data || []);
-        if (data && data.length > 0) {
-          setActiveEvent(data[0]);
-        }
-      }
-      setLoading(false);
-    }
-
-    fetchEvents();
-  }, []);
-
-  if (loading) {
-    return (
-      <>
-        <Navbar />
-        <div className="min-h-screen bg-black text-white flex items-center justify-center">
-          <p className="text-3xl">Loading events...</p>
-        </div>
-      </>
-    );
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("Supabase configuration missing");
+    return [];
   }
 
-  if (configError) {
-    return (
-      <>
-        <Navbar />
-        <div className="min-h-screen bg-black text-white flex items-center justify-center">
-          <p className="text-3xl">{configError}</p>
-        </div>
-      </>
-    );
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+  });
+
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, slug, title, description, cover_url, starts_at")
+    .neq("slug", "profile-photos")
+    .order("starts_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching events:", error);
+    return [];
   }
+
+  return (data || []) as Event[];
+}
+
+export const metadata = {
+  title: "Events - FMC Gallery",
+  description: "Browse all events and their photos",
+};
+
+const sanitize = (u?: string | null) => (u || "").trim().replace(/\)+$/, "");
+
+export default async function EventsPage() {
+  const events = await getEvents();
 
   if (events.length === 0) {
     return (
@@ -84,45 +60,28 @@ export default function EventsPage() {
     <>
       <Navbar />
       <div className="min-h-screen bg-black text-white py-20">
-        {/* Title */}
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-16 text-white">
             Our Events
           </h1>
         </div>
 
-        {/* Swiper Gallery */}
         <div className="max-w-7xl mx-auto px-6">
-          <Swiper
-            modules={[Navigation, Pagination]}
-            spaceBetween={30}
-            slidesPerView={1.2}
-            centeredSlides={true}
-            grabCursor={true}
-            pagination={{ clickable: true }}
-            navigation={true}
-            breakpoints={{
-              640: { slidesPerView: 2.2 },
-              1024: { slidesPerView: 3.2 },
-            }}
-            onSlideChange={(swiper) => setActiveEvent(events[swiper.activeIndex])}
-            className="event-swiper"
-          >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => (
-              <SwiperSlide key={event.id}>
-                <EventCard
-                  event={{
-                    id: event.id,
-                    slug: event.slug,
-                    name: event.title,
-                    description: event.description,
-                    coverImage: sanitize(event.cover_url),
-                  }}
-                  isActive={activeEvent?.id === event.id}
-                />
-              </SwiperSlide>
+              <EventCard
+                key={event.id}
+                event={{
+                  id: event.id,
+                  slug: event.slug,
+                  name: event.title,
+                  description: event.description,
+                  coverImage: sanitize(event.cover_url),
+                }}
+                isActive={false}
+              />
             ))}
-          </Swiper>
+          </div>
         </div>
       </div>
     </>

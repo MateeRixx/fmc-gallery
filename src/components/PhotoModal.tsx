@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCurrentUser } from "@/lib/jwt";
+import { useSession } from "next-auth/react";
 import { Permission } from "@/types";
 
 type PhotoModalProps = {
@@ -23,7 +23,8 @@ export default function PhotoModal({
   clusterId,
   onPhotoDeleted,
 }: PhotoModalProps) {
-  const [user] = useState(getCurrentUser());
+  const { data: session } = useSession();
+  const user = session?.user;
   const [deleting, setDeleting] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState("");
 
@@ -66,12 +67,10 @@ export default function PhotoModal({
     setDeleteStatus("Deleting photo...");
 
     try {
-      const token = localStorage.getItem("fmc-auth-token") || "";
       const response = await fetch("/api/admin/photos", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           photo_id: photoId,

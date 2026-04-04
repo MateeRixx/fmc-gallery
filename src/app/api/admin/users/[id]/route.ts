@@ -15,7 +15,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
-import { requireSupremeAdmin } from "@/lib/middleware";
+import { requireSupremeAdmin } from "@/lib/auth-utils";
 import { User, UserRole, RoleChangeResponse } from "@/types";
 
 export async function PATCH(

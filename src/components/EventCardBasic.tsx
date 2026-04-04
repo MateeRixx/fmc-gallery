@@ -64,6 +64,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
             fill
             sizes="(max-width: 768px) 17.6rem, 22rem"
             priority={false}
+            unoptimized
             className="object-cover"
           />
         </div>

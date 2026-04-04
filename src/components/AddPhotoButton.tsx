@@ -2,8 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import imageCompression from "browser-image-compression";
-import { getCurrentUser } from "@/lib/jwt";
 import { Permission, UserRole } from "@/types";
 
 const SAVE_CHUNK = 25;
@@ -15,6 +15,7 @@ type SavedPhoto = {
 };
 
 export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
+  const { data: session } = useSession();
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<"device" | "drive">("device");
 
@@ -32,14 +33,13 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   // ── Device upload helpers ────────────────────────────────────────────────
 
   async function uploadViaApi(file: File) {
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) throw new Error("Unauthorized. Please log in again.");
+    // NextAuth handles session via HttpOnly cookies, no need for manual token
+    if (!session?.user) throw new Error("Unauthorized. Please log in again.");
     const fd = new FormData();
     fd.append("file", file);
     fd.append("dir", `${eventSlug}/photos`);
     const res = await fetch("/api/upload", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: fd,
     });
     if (!res.ok) {
@@ -52,13 +52,11 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   }
 
   async function saveBatch(urls: string[], slug: string): Promise<SavedPhoto[]> {
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) throw new Error("Unauthorized. Please log in again.");
+    if (!session?.user) throw new Error("Unauthorized. Please log in again.");
     const res = await fetch("/api/admin/photos", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ event_slug: slug, urls }),
     });
@@ -70,14 +68,12 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   async function indexFacesAws(photos: SavedPhoto[]) {
     if (!photos.length) return { indexedFaces: 0, failedPhotos: 0, newFaceIds: [] };
 
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) throw new Error("Unauthorized. Please log in again.");
+    if (!session?.user) throw new Error("Unauthorized. Please log in again.");
 
     const res = await fetch("/api/admin/faces/index-aws", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         photos: photos.map((photo) => ({
@@ -103,14 +99,12 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   async function mergeNewFacesIncremental(newFaceIds: number[]) {
     if (newFaceIds.length === 0) return { mergedCount: 0 };
 
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) throw new Error("Unauthorized. Please log in again.");
+    if (!session?.user) throw new Error("Unauthorized. Please log in again.");
 
     const res = await fetch("/api/admin/faces/recluster", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         mode: "incremental",
@@ -133,14 +127,12 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
   }
 
   async function fullRecluster() {
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) throw new Error("Unauthorized. Please log in again.");
+    if (!session?.user) throw new Error("Unauthorized. Please log in again.");
 
     const res = await fetch("/api/admin/faces/recluster", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         mode: "full",
@@ -159,10 +151,9 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
 
   const handleUpload = async () => {
     if (files.length === 0) { setStatus("Select images to upload"); return; }
-    const user = getCurrentUser();
-    if (!user) { setStatus("Unauthorized. Please log in again."); return; }
-    const isSupreme = user.role === UserRole.HEAD || user.role === UserRole.CO_HEAD;
-    if (!isSupreme && !user.permissions?.includes(Permission.CAN_UPLOAD_PHOTOS)) {
+    if (!session?.user) { setStatus("Unauthorized. Please log in again."); return; }
+    const isSupreme = session.user.role === UserRole.HEAD || session.user.role === UserRole.CO_HEAD;
+    if (!isSupreme && !session.user.permissions?.includes(Permission.CAN_UPLOAD_PHOTOS)) {
       setStatus("You don't have permission to upload photos.");
       return;
     }
@@ -243,8 +234,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
 
   const handleDriveImport = async () => {
     if (!driveUrl.trim()) { setDriveStatus("Paste a Google Drive folder link first."); return; }
-    const token = localStorage.getItem("fmc-auth-token") || "";
-    if (!token) { setDriveStatus("Unauthorized. Please log in again."); return; }
+    if (!session?.user) { setDriveStatus("Unauthorized. Please log in again."); return; }
 
     setDriveBusy(true);
     setDriveProgress(0);
@@ -254,7 +244,6 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ folder_url: driveUrl.trim(), event_slug: eventSlug }),
       });

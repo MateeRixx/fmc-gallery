@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, extractTokenFromHeader } from "@/lib/jwt";
-import { getStoredToken } from "@/lib/jwt";
+import { useSession } from "next-auth/react";
 
 interface Invitation {
   id: string;
@@ -25,23 +24,14 @@ export default function InvitationsPage() {
   const [loadingInvitations, setLoadingInvitations] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const router = useRouter();
+  const { data: session, status: authStatus } = useSession();
 
-  const user = getCurrentUser();
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-white mb-4">Please sign in first</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="px-6 py-2 bg-white text-black rounded-lg font-semibold"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (authStatus === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [authStatus, router]);
 
   const handleGenerateInvitation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,12 +50,11 @@ export default function InvitationsPage() {
     setStatus("Generating invitation...");
 
     try {
-      const token = getStoredToken();
+      // NextAuth handles session via HttpOnly cookies, no need for manual token
       const response = await fetch("/api/auth/create-invitation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           target_email: targetEmail.toLowerCase().trim(),
@@ -96,12 +85,8 @@ export default function InvitationsPage() {
   const loadInvitations = async () => {
     setLoadingInvitations(true);
     try {
-      const token = getStoredToken();
-      const response = await fetch("/api/admin/invitations", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // NextAuth handles session via HttpOnly cookies
+      const response = await fetch("/api/admin/invitations");
 
       if (response.ok) {
         const data = await response.json();

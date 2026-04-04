@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
-import { requireAuth } from "@/lib/middleware";
+import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
+import sharp from "sharp";
 
 export async function POST(request: Request) {
-  const authResult = await requireAuth(request);
+  const authResult = await requireAuthCompat(request);
   if (authResult instanceof Response) return authResult;
   const canUpload =
     isSupremeAdmin(authResult.role) ||
@@ -38,19 +39,25 @@ export async function POST(request: Request) {
       return Response.json({ error: "Only image uploads are allowed" }, { status: 415 });
     }
 
-    const mimeToExt: Record<string, string> = {
-      "image/jpeg": "jpg",
-      "image/jpg": "jpg",
-      "image/png": "png",
-      "image/webp": "webp",
-      "image/gif": "gif",
-    };
-    const ext = mimeToExt[file.type] || file.name.split(".").pop() || "jpg";
+    const ext = "jpg"; // Convert everything to JPEG
+    const mimeToExt = "image/jpeg";
     const path = `${dir}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Apply high compression
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const compressedBuffer = await sharp(buffer)
+      .resize(1920, 1920, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: 75, mozjpeg: true })
+      .toBuffer();
 
     const { error } = await supabase.storage
       .from("event-images")
-      .upload(path, file, { contentType: file.type });
+      .upload(path, compressedBuffer, { contentType: mimeToExt });
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
