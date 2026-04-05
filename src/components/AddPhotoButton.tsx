@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { Permission, UserRole } from "@/types";
 
@@ -14,8 +15,7 @@ type SavedPhoto = {
   path: string;
 };
 
-export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
-  const { data: session } = useSession();
+export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {  const router = useRouter();  const { data: session } = useSession();
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<"device" | "drive">("device");
 

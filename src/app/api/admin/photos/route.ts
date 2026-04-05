@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
 
@@ -60,6 +61,12 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error("Could not trigger auto-indexing:", err);
       }
+    }
+    if (event_slug) {
+      revalidatePath(`/events/${event_slug}`);
+      revalidatePath(`/events`);
+    } else {
+      revalidatePath(`/events`);
     }
     return Response.json({ ok: true, count: rows.length, photos: data ?? [] });
   } catch {
@@ -129,13 +136,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     console.log(`[DELETE PHOTO] Successfully deleted photo ${photo_id} and related face data`);
+    revalidatePath(`/events`);
 
     return Response.json({
       ok: true,
       deleted_photo: deletedPhoto,
       message: "Photo and related face data deleted successfully"
     });
-
   } catch (error) {
     console.error("Delete photo failed:", error);
     return Response.json({

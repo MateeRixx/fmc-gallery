@@ -9,6 +9,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
@@ -275,6 +276,14 @@ export async function POST(request: NextRequest) {
             })}\n\n`
           )
         );
+
+        if (event_slug) {
+          revalidatePath(`/events/${event_slug}`);
+          revalidatePath(`/events`);
+        } else {
+          revalidatePath(`/events`);
+        }
+
         controller.close();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
