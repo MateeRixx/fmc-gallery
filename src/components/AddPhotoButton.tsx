@@ -198,16 +198,6 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {
         allNewFaceIds.push(...indexStats.newFaceIds);
       }
 
-      // Use incremental merge for new faces, full recluster only if >50 photos
-      if (allNewFaceIds.length > 0) {
-        if (files.length >= 50) {
-          setStatus("Running full recluster (large batch)...");
-          await fullRecluster();
-        } else {
-          setStatus(`Merging ${allNewFaceIds.length} new face(s) into clusters...`);
-          await mergeNewFacesIncremental(allNewFaceIds);
-        }
-      }
 
       setStatus(
         `✓ Added ${files.length} photo(s). AWS indexed ${indexedFacesCount} face(s) with ${indexingFailedPhotos} photo indexing failures.`
