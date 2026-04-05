@@ -28,10 +28,11 @@ export default function MomentsGalleryClient({ matches }: MomentProps) {
             onClick={() => setLightboxIndex(index)}
             className="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 aspect-[3/4] cursor-pointer"
           >
-            <Image 
-              src={match.photoUrl} 
-              alt="Moment" 
-              fill 
+            <Image
+              src={match.photoUrl}
+              alt="Moment"
+              fill
+              unoptimized
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover group-hover:scale-105 transition-transform duration-500" 
             />

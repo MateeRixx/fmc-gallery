@@ -5,6 +5,8 @@ import AddPhotoButton from "@/components/AddPhotoButton";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Lightbox from "@/components/Lightbox";
+import { useSession } from "next-auth/react";
+import { Permission, UserRole } from "@/types";
 
 export type EventData = {
   id: string;
@@ -25,6 +27,7 @@ function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSe
       width={800}
       height={600}
       loading="lazy"
+      unoptimized
       sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setVisible(false)}
       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -33,13 +36,20 @@ function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSe
 }
 
 export default function EventGalleryClient({ slug, event }: { slug: string; event: EventData }) {
+  const { data: session } = useSession();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const longPressTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   const galleryImages = event.images;
+
+  // Check if user has permission to delete photos
+  const canDelete = session?.user?.role === UserRole.HEAD || 
+                   session?.user?.role === UserRole.CO_HEAD || 
+                   session?.user?.permissions?.includes(Permission.CAN_DELETE_PHOTOS);
 
   useEffect(() => {
     setSelectedImages((prev) => {
@@ -156,6 +166,42 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
       setIsDownloading(false);
     }
   };
+
+  const deleteSelectedPhotos = async () => {
+    if (selectedImages.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedImages.size} photo(s)? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const selectedUrls = Array.from(selectedImages).map(i => galleryImages[i]);
+      
+      const response = await fetch("/api/admin/photos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo_paths: selectedUrls }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete photos");
+      }
+
+      alert("Successfully deleted!");
+      // Reload page to get fresh photos from server and reset selected
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to delete photos:", err);
+      alert(`Error deleting photos: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -167,6 +213,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
           fill
           priority
           quality={75}
+          unoptimized
           sizes="100vw"
           className="object-cover brightness-50"
         />
@@ -208,10 +255,19 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
                     {selectedImages.size > 0 && (
                       <button
                         onClick={downloadSelectedAsZip}
-                        disabled={isDownloading}
+                        disabled={isDownloading || isDeleting}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-700 disabled:opacity-50 text-white text-sm rounded-full transition font-semibold shadow-lg shadow-purple-500/30"
                       >
                         {isDownloading ? "Downloading..." : `Download (${selectedImages.size})`}
+                      </button>
+                    )}
+                    {canDelete && selectedImages.size > 0 && (
+                      <button
+                        onClick={deleteSelectedPhotos}
+                        disabled={isDeleting || isDownloading}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-red-700 disabled:opacity-50 text-white text-sm rounded-full transition font-semibold shadow-lg shadow-red-500/30"
+                      >
+                        {isDeleting ? "Deleting..." : `Delete (${selectedImages.size})`}
                       </button>
                     )}
                     <button

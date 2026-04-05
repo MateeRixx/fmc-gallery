@@ -167,6 +167,13 @@ async function handler(request: Request) {
     let userId: string;
 
     if (existingUser) {
+      // If user exists and provides a photo, it means they are trying to sign up again
+      if (photo) {
+        return Response.json(
+          { error: "Account already exists. Please log in instead." },
+          { status: 409 }
+        );
+      }
       userId = existingUser.id;
     } else {
       // Create new user

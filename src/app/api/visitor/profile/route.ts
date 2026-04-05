@@ -271,3 +271,83 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+// DELETE: Delete current visitor's profile completely
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+
+    // 1. Fetch the user's profile and face clusters to clean them up
+    const { data: profile } = await supabase
+      .from("visitor_profiles")
+      .select("profile_photo_url, aws_face_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    // Delete profile photo from storage if exists
+    if (profile?.profile_photo_url) {
+      try {
+        const urlParts = profile.profile_photo_url.split("/");
+        const fileName = urlParts[urlParts.length - 1];
+        if (fileName) {
+          await supabase.storage.from("profile-photos").remove([`visitors/${fileName}`]);
+        }
+      } catch (e) {
+        console.error("Failed to delete profile photo from storage:", e);
+      }
+    }
+
+    // Delete from AWS Rekognition
+    if (profile?.aws_face_id) {
+      const { deleteUser } = await import("@/lib/awsRekognition");
+      try {
+        await deleteUser({ userId });
+        console.log(`Deleted AWS User grouping for: ${userId}`);
+      } catch (awsErr) {
+        console.error(`Failed to delete AWS User ${userId}:`, awsErr);
+      }
+    }
+
+    // Clean up face embeddings linked to this user's clusters
+    const { data: clusters } = await supabase
+      .from("face_clusters")
+      .select("id")
+      .eq("user_id", userId);
+
+    if (clusters && clusters.length > 0) {
+      const clusterIds = clusters.map(c => c.id);
+      await supabase
+        .from("face_embeddings")
+        .delete()
+        .in("cluster_id", clusterIds);
+    }
+
+    // Finally, delete the user record (which should cascade to memberships, visitor_profiles, and face_clusters)
+    const { error: deleteUserError } = await supabase
+      .from("users")
+      .delete()
+      .eq("id", userId);
+
+    if (deleteUserError) {
+      console.error("Failed to delete user record:", deleteUserError);
+      return NextResponse.json(
+        { error: "Failed to delete user account" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Profile deletion error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

@@ -8,6 +8,8 @@ import {
   AssociateFacesCommand,
   SearchUsersCommand,
   SearchUsersCommandOutput,
+  DeleteUserCommand,
+  DeleteFacesCommand,
 } from "@aws-sdk/client-rekognition";
 
 const awsRegion = process.env.AWS_REGION || "us-east-1";
@@ -193,6 +195,40 @@ export async function associateFacesToUser(params: { userId: string; faceIds: st
     associatedFaces: response.AssociatedFaces || [],
     unsuccessfulFaceAssociations: response.UnsuccessfulFaceAssociations || [],
   };
+}
+
+export async function deleteUser(params: { userId: string }) {
+  const rekognition = createRekognitionClient();
+  try {
+    await rekognition.send(
+      new DeleteUserCommand({
+        CollectionId: collectionId,
+        UserId: params.userId,
+      })
+    );
+    return { success: true };
+  } catch (error) {
+    const errorName =
+      typeof error === "object" && error !== null && "name" in error
+        ? String((error as { name?: unknown }).name || "")
+        : "";
+    if (errorName === "ResourceNotFoundException") {
+      return { success: true }; // Already deleted
+    }
+    throw error;
+  }
+}
+
+export async function deleteFaces(params: { faceIds: string[] }) {
+  if (!params.faceIds.length) return { success: true };
+  const rekognition = createRekognitionClient();
+  await rekognition.send(
+    new DeleteFacesCommand({
+      CollectionId: collectionId,
+      FaceIds: params.faceIds,
+    })
+  );
+  return { success: true };
 }
 
 export async function searchUsersByFaceId(params: {

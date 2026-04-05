@@ -61,11 +61,11 @@ export default function SyncMomentsClient({ profileId, awsFaceId }: { profileId:
   };
 
   return (
-    <div className="absolute top-8 right-8">
-      <button 
+    <div className="relative">
+      <button
         onClick={handleManualSync}
         disabled={syncing}
-        className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all shadow-sm"
+        className="flex items-center justify-center gap-2 bg-white text-black border border-gray-200 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-all shadow-sm"
       >
         <svg 
           className={`w-4 h-4 text-blue-600 ${syncing ? 'animate-spin' : ''}`} 

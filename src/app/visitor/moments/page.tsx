@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import SyncMomentsClient from "./SyncMomentsClient";
 import MomentsGalleryClient from "./MomentsGalleryClient";
+import DeleteProfileButton from "./DeleteProfileButton";
 
 export default async function MomentsPage() {
   const session = await getServerSession(authOptions);
@@ -59,13 +60,11 @@ export default async function MomentsPage() {
 
   return (
     <div className="relative max-w-7xl mx-auto px-4 py-8">
-      <SyncMomentsClient profileId={profile.id} awsFaceId={profile.aws_face_id} />
-
-      <div className="flex flex-col md:flex-row items-center md:items-end justify-between mb-8 border-b pb-6 gap-4">
+      <div className="flex flex-col md:flex-row items-center md:items-end justify-between mb-8 border-b border-gray-800 pb-6 gap-4">
         <div className="flex items-center space-x-6">
-          <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-lg border-2 border-blue-500">  
+          <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-lg border-2 border-blue-500">
              {profile.profile_photo_url ? (
-               <Image src={profile.profile_photo_url} alt="Profile" fill className="object-cover" />
+               <Image src={profile.profile_photo_url} alt="Profile" fill unoptimized className="object-cover" />
              ) : (
                <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-xl">
                  {profile.full_name.charAt(0)}
@@ -73,9 +72,13 @@ export default async function MomentsPage() {
              )}
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Your Moments</h1>
-            <p className="text-gray-500 mt-1">Hello, {profile.full_name}. We found {formattedMatches.length} photos of you.</p>
+            <h1 className="text-3xl font-bold text-white">Your Moments</h1>
+            <p className="text-gray-400 mt-1">Hello, {profile.full_name}. We found {formattedMatches.length} photos of you.</p>
           </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <SyncMomentsClient profileId={profile.id} awsFaceId={profile.aws_face_id} />
+          <DeleteProfileButton />
         </div>
       </div>
 

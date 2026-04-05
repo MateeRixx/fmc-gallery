@@ -26,22 +26,31 @@ async function handler(request: Request) {
     const email = validated.email.toLowerCase().trim();
 
     // If it's a login request, ensure the user exists before sending an OTP
-    if (validated.isLogin) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (supabaseUrl && serviceRoleKey) {
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
-        const { data: user, error } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .maybeSingle();
+    // If it's a signup request, ensure the user DOES NOT exist
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (supabaseUrl && serviceRoleKey) {
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { data: user, error } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
 
+      if (validated.isLogin) {
         if (error || !user) {
           return Response.json(
             { error: "No account found. Please sign up first." },
             { status: 404 }
+          );
+        }
+      } else {
+        // It's a signup request, so user should NOT exist
+        if (user) {
+          return Response.json(
+            { error: "Account already exists. Please log in instead." },
+            { status: 409 }
           );
         }
       }

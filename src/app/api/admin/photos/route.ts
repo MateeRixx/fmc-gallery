@@ -87,61 +87,94 @@ export async function DELETE(request: NextRequest) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await request.json();
-    const { photo_id } = body || {};
+    const { photo_id, photo_ids, photo_paths } = body || {};
 
-    if (!photo_id) {
-      return Response.json({ error: "Missing photo_id" }, { status: 400 });
+    if (!photo_id && (!photo_ids || !Array.isArray(photo_ids) || photo_ids.length === 0) && (!photo_paths || !Array.isArray(photo_paths) || photo_paths.length === 0)) {
+      return Response.json({ error: "Missing photo_id, photo_ids, or photo_paths" }, { status: 400 });
     }
 
-    console.log(`[DELETE PHOTO] Admin ${user.email} deleting photo ${photo_id}`);
+    let idsToDelete: string[] = [];
+    let photosToDelete: any[] = [];
+
+    if (photo_paths && Array.isArray(photo_paths) && photo_paths.length > 0) {
+      // Find photos by path
+      const { data: foundPhotos, error: fetchError } = await supabase
+        .from("photos")
+        .select("id, path")
+        .in("path", photo_paths);
+
+      if (fetchError || !foundPhotos || foundPhotos.length === 0) {
+        return Response.json({ error: "Photos not found by path" }, { status: 404 });
+      }
+      photosToDelete = foundPhotos;
+      idsToDelete = foundPhotos.map(p => p.id);
+    } else {
+      idsToDelete = photo_id ? [photo_id] : photo_ids;
+      
+      // Fetch the paths to delete from storage later
+      const { data: foundPhotos, error: fetchError } = await supabase
+        .from("photos")
+        .select("id, path")
+        .in("id", idsToDelete);
+
+      if (fetchError || !foundPhotos || foundPhotos.length === 0) {
+        return Response.json({ error: "Photos not found or fetch error" }, { status: 404 });
+      }
+      photosToDelete = foundPhotos;
+    }
+
+    console.log(`[DELETE PHOTO] Admin ${user.email} deleting photos: ${idsToDelete.join(", ")}`);
 
     // First, delete related face embeddings and cluster data
     const { error: faceDeleteError } = await supabase
       .from("face_embeddings")
       .delete()
-      .eq("photo_id", photo_id);
+      .in("photo_id", idsToDelete);
 
     if (faceDeleteError) {
       console.error("Failed to delete face embeddings:", faceDeleteError);
       // Continue anyway - photo deletion is more important
     }
 
-    // Delete the photo record
-    const { data: deletedPhoto, error: photoDeleteError } = await supabase
+    // Delete the photo records
+    const { error: photoDeleteError } = await supabase
       .from("photos")
       .delete()
-      .eq("id", photo_id)
-      .select("id, event_id, path")
-      .single();
+      .in("id", idsToDelete);
 
     if (photoDeleteError) {
       return Response.json({
-        error: photoDeleteError.message || "Failed to delete photo"
+        error: photoDeleteError.message || "Failed to delete photos"
       }, { status: 500 });
     }
 
-    if (!deletedPhoto) {
-      return Response.json({ error: "Photo not found" }, { status: 404 });
-    }
+    // Delete the actual image files from Supabase Storage
+    const pathsToDelete = photosToDelete.map(p => {
+      if (!p.path) return null;
+      // Extract relative path from Supabase full URL if necessary
+      if (p.path.includes("/storage/v1/object/public/event-images/")) {
+        return p.path.split("/storage/v1/object/public/event-images/")[1];
+      }
+      return p.path;
+    }).filter(Boolean);
 
-    // Delete the actual image file from Supabase Storage
-    if (deletedPhoto.path) {
+    if (pathsToDelete.length > 0) {
       const { error: storageError } = await supabase.storage
         .from("event-images")
-        .remove([deletedPhoto.path]);
+        .remove(pathsToDelete as string[]);
         
       if (storageError) {
-        console.error("Failed to delete photo file from storage:", storageError.message);
+        console.error("Failed to delete photo files from storage:", storageError.message);
       }
     }
 
-    console.log(`[DELETE PHOTO] Successfully deleted photo ${photo_id} and related face data`);
+    console.log(`[DELETE PHOTO] Successfully deleted ${idsToDelete.length} photos and related face data`);
     revalidatePath(`/events`);
 
     return Response.json({
       ok: true,
-      deleted_photo: deletedPhoto,
-      message: "Photo and related face data deleted successfully"
+      deleted_count: idsToDelete.length,
+      message: "Photos and related face data deleted successfully"
     });
   } catch (error) {
     console.error("Delete photo failed:", error);

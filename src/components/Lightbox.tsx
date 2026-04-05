@@ -70,6 +70,7 @@ export default function Lightbox({ isOpen, onClose, images, currentIndex, onNavi
             fill
             sizes="100vw"
             quality={95}
+            unoptimized
             className="object-contain"
             priority
           />
