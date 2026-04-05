@@ -43,6 +43,24 @@ export async function POST(request: NextRequest) {
     if (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
+    // FIRE AND FORGET: Automatically AWS index the newly uploaded photos
+    if (data && data.length > 0) {
+      try {
+        const payload = data.map((photo) => ({
+          photo_id: photo.id,
+          event_id: photo.event_id,
+          image_url: supabase.storage.from("events").getPublicUrl(photo.path).data.publicUrl
+        }));
+
+        fetch(new URL("/api/admin/faces/index-aws", request.url).toString(), {
+          method: "POST",
+          headers: request.headers,
+          body: JSON.stringify({ photos: payload })
+        }).catch(err => console.error("Background AWS indexing failed to launch:", err));
+      } catch (err) {
+        console.error("Could not trigger auto-indexing:", err);
+      }
+    }
     return Response.json({ ok: true, count: rows.length, photos: data ?? [] });
   } catch {
     return Response.json({ error: "Insert failed" }, { status: 500 });

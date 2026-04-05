@@ -35,7 +35,7 @@ export default function ProfileSetupPage() {
         const response = await fetch("/api/visitor/profile/check");
         const data = await response.json();
         if (data.hasProfile) {
-          router.push("/people");
+          router.push("/visitor/moments");
         }
       } catch (error) {
         console.error("Error checking profile:", error);
@@ -50,7 +50,7 @@ export default function ProfileSetupPage() {
     return () => {
       if (videoRef.current?.srcObject) {
         const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach(track => track.stop());
+        tracks.forEach((track) => track.stop());
       }
     };
   }, []);
@@ -75,7 +75,7 @@ export default function ProfileSetupPage() {
   const stopCamera = () => {
     if (videoRef.current?.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach(track => track.stop());
+      tracks.forEach((track) => track.stop());
       setCameraActive(false);
     }
   };
@@ -93,6 +93,27 @@ export default function ProfileSetupPage() {
         stopCamera();
       }
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload a valid image file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreview(event.target?.result as string);
+      stopCamera();
+      setError(null);
+    };
+    reader.onerror = () => {
+      setError("Failed to read the file");
+    };
+    reader.readAsDataURL(file);
   };
 
   const retakePhoto = () => {
@@ -139,9 +160,9 @@ export default function ProfileSetupPage() {
       // First, trigger face indexing in background
       fetch("/api/visitor/profile/index-face", {
         method: "POST",
-      }).catch(err => console.error("Face indexing started (bg):", err));
+      }).catch((err) => console.error("Face indexing started (bg):", err));
 
-      router.push("/people");
+      router.push("/visitor/moments");
     } catch (err) {
       console.error("Profile creation error:", err);
       setError(err instanceof Error ? err.message : "Failed to create profile");
@@ -340,7 +361,8 @@ export default function ProfileSetupPage() {
 
                     {cameraActive && (
                       <div className="text-xs text-center text-gray-600 bg-blue-50 p-2 rounded">
-                        Position your face in the circle, then click "Capture Photo"
+                        Position your face in the circle, then click "Capture
+                        Photo"
                       </div>
                     )}
                   </div>
@@ -409,7 +431,7 @@ export default function ProfileSetupPage() {
                           How it works
                         </h4>
                         <p className="text-sm text-blue-800">
-                          We'll use facial recognition to find all photos from
+                          We&apos;ll use facial recognition to find all photos from
                           our events that contain your face. Your privacy is
                           protected - you'll only see photos with you in them.
                         </p>

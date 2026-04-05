@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import FaceSearchPanel from "@/components/faces/FaceSearchPanel";
+import Link from "next/link";
 
 type UnprocessedPhoto = {
   id: string;
@@ -15,12 +15,6 @@ export default function AdminFacesPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [hydrated, setHydrated] = useState(false);
-  const [eventId, setEventId] = useState("");
-  const [threshold, setThreshold] = useState(0.35);
-  const [minQuality, setMinQuality] = useState(0.45);
-  const [running, setRunning] = useState(false);
-  const [clusterStatus, setClusterStatus] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -38,10 +32,14 @@ export default function AdminFacesPage() {
   const [stats, setStats] = useState<{
     total_photos: number;
     total_embeddings: number;
-    total_clusters: number;
-    photos_with_embeddings: number;
-    photos_without_embeddings: number;
-  } | null>(null);
+    total_matches: number;
+    total_visitors: number;
+  }>({
+    total_photos: 0,
+    total_embeddings: 0,
+    total_matches: 0,
+    total_visitors: 0,
+  });
 
   useEffect(() => {
     setHydrated(true);
@@ -50,9 +48,9 @@ export default function AdminFacesPage() {
   const loadStats = async () => {
     try {
       const response = await fetch("/api/admin/faces/stats");
-      const data = await response.json();
       if (response.ok) {
-        setStats(data.stats);
+        const data = await response.json();
+        setStats(data);
       }
     } catch (error) {
       console.error("Failed to load stats:", error);
@@ -65,160 +63,40 @@ export default function AdminFacesPage() {
     }
   }, [hydrated, session?.user]);
 
-  const runRecluster = async () => {
-    setRunning(true);
-    setClusterStatus("Rebuilding people clusters...");
-
-    try {
-      const response = await fetch("/api/admin/faces/recluster", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          threshold,
-          min_quality: minQuality,
-          reset: true,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        setClusterStatus(`Failed: ${data.error || "Unknown error"}`);
-        return;
-      }
-
-      setClusterStatus(
-        `Done. Processed ${data.processed_faces} faces, created ${data.created_clusters} clusters, total ${data.total_clusters} clusters.`
-      );
-      loadStats(); // Refresh stats
-    } catch (error) {
-      console.error("Reclustering failed:", error);
-      setClusterStatus("Reclustering failed due to a network or server error.");
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const runClusteringOnly = async () => {
-    const response = await fetch("/api/admin/faces/recluster", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        threshold,
-        min_quality: minQuality,
-        reset: false,
-      }),
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      setProcessStatus(
-        `✓ Clustering complete! Created ${data.created_clusters} clusters from ${data.processed_faces} faces.`
-      );
-      loadStats();
-    } else {
-      setProcessStatus(`Clustering failed: ${data.error || "Unknown error"}`);
-    }
-  };
-
-  const testThresholds = async () => {
-    setRunning(true);
-    setClusterStatus("Testing different thresholds...");
-
-    try {
-      const thresholds = [0.2, 0.3, 0.35, 0.4, 0.5, 0.6];
-      const results: string[] = [];
-
-      for (const t of thresholds) {
-        const response = await fetch("/api/admin/faces/recluster", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            threshold: t,
-            min_quality: minQuality,
-            reset: true,
-          }),
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          results.push(
-            `Threshold ${t}: ${data.created_clusters} clusters from ${data.processed_faces} faces`
-          );
-          // Only show debug logs for first threshold
-          if (t === thresholds[0]) {
-            console.log(`Debug logs for threshold ${t}:`, data.debug?.distanceLogs);
-          }
-        } else {
-          results.push(`Threshold ${t}: Error - ${data.error}`);
-        }
-      }
-
-      setClusterStatus(
-        `Results:\n${results.join(
-          "\n"
-        )}\n\nCheck browser console (F12) for detailed distance logs.\nChoose the best threshold and set it above, then click "Run Full Reclustering"`
-      );
-      loadStats();
-    } catch (error) {
-      setClusterStatus("Test failed: " + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setRunning(false);
-    }
-  };
-
   const processExistingPhotos = async () => {
     setProcessing(true);
     setProcessStatus("Fetching unprocessed photos...");
     setProcessProgress({ current: 0, total: 0 });
 
     try {
-      // Fetch photos without face embeddings
-      const listResponse = await fetch("/api/admin/faces/unprocessed?limit=500&mode=aws");
-
-      const listData = await listResponse.json();
-      if (!listResponse.ok) {
-        setProcessStatus(`Failed: ${listData.error || "Unknown error"}`);
+      const fetchResponse = await fetch("/api/admin/faces/unprocessed");
+      if (!fetchResponse.ok) throw new Error("Failed to fetch unprocessed photos");
+      
+      const { photos } = await fetchResponse.json();
+      const unprocessedPhotos: UnprocessedPhoto[] = photos || [];
+      const total = unprocessedPhotos.length;
+      
+      if (total === 0) {
+        setProcessStatus("No unprocessed photos found. All photos are already indexed in AWS!");
+        setProcessing(false);
         return;
       }
 
-      console.log("Unprocessed photos response:", listData);
-      const photos = (listData.photos || []) as UnprocessedPhoto[];
-      console.log(`Found ${photos.length} unprocessed photos out of ${listData.total_unprocessed || "?"}`);
+      setProcessProgress({ current: 0, total });
+      setProcessStatus(`Indexing ${total} photos via AWS...`);
 
-      if (photos.length === 0) {
-        // Check if we need to run clustering on existing embeddings
-        const statsResponse = await fetch("/api/admin/faces/stats");
-        const statsData = await statsResponse.json();
-
-        if (statsResponse.ok && statsData.stats) {
-          const { total_embeddings, total_clusters } = statsData.stats;
-          if (total_embeddings > 0 && total_clusters === 0) {
-            setProcessStatus("No unprocessed photos, but running clustering on existing embeddings...");
-            await runClusteringOnly();
-            return;
-          }
-        }
-
-        setProcessStatus("All photos already have face embeddings and clusters!");
-        loadStats();
-        return;
-      }
-
-      setProcessProgress({ current: 0, total: photos.length });
-      setProcessStatus("Indexing photos with AWS Rekognition...");
+      // We process photos in smaller batches to avoid serverless timeouts (Vercel limits API executions to 10-15s)
+      const BATCH_SIZE = 10;
       let totalFacesIndexed = 0;
       let totalFailedIndexing = 0;
 
-      for (let i = 0; i < photos.length; i++) {
-        const photo = photos[i];
-        setProcessProgress({ current: i + 1, total: photos.length });
-        setProcessStatus(`Processing photo ${i + 1}/${photos.length}...`);
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = unprocessedPhotos.slice(i, i + BATCH_SIZE);
+        const payload = batch.map((photo) => ({
+          photo_id: photo.id,
+          event_id: photo.event_id,
+          image_url: photo.path,
+        }));
 
         try {
           const indexResponse = await fetch("/api/admin/faces/index-aws", {
@@ -226,276 +104,149 @@ export default function AdminFacesPage() {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              photos: [
-                {
-                  photo_id: photo.id,
-                  event_id: photo.event_id,
-                  image_url: photo.path,
-                },
-              ],
-            }),
+            body: JSON.stringify({ photos: payload }),
           });
 
           if (indexResponse.ok) {
             const indexData = await indexResponse.json();
-            totalFacesIndexed += Number(indexData.indexed_faces || 0);
-            totalFailedIndexing += Number(indexData.failed_photos || 0);
-            if (Number(indexData.failed_photos || 0) > 0) {
-              const failures = indexData.failures || [];
-              console.warn(`AWS indexing photo failures (${failures.length}):`, failures);
-
-              // Group failures by error type for better debugging
-              const errorTypes = failures.reduce((acc: Record<string, number>, f: any) => {
-                const errorKey = f.error || 'Unknown error';
-                acc[errorKey] = (acc[errorKey] || 0) + 1;
-                return acc;
-              }, {});
-
-              console.log('Failure breakdown:', errorTypes);
-
-              const firstFailure = failures[0];
-              if (firstFailure?.error) {
-                setProcessStatus(
-                  `Indexing warning: ${firstFailure.error} (${failures.length} photo(s) affected, continuing...)`
-                );
-              }
-            }
+            totalFacesIndexed += indexData.indexed_faces || 0;
+            totalFailedIndexing += indexData.failed_photos || 0;
+            
+            // Advance progress bar
+            setProcessProgress({ current: Math.min(i + BATCH_SIZE, total), total });
+            setProcessStatus(`Batch ${Math.round(i/BATCH_SIZE) + 1} complete. Indexed ${totalFacesIndexed} faces so far...`);
+            
+            // Wait 500ms between batches to respect AWS rate limits
+            await new Promise((resolve) => setTimeout(resolve, 500));
           } else {
-            const indexData = await indexResponse.json().catch(() => ({}));
-            console.warn("AWS indexing failed for photo", photo.id, indexData.error || indexData);
-            totalFailedIndexing += 1;
+            console.warn("AWS indexing failed for batch", i);
+            totalFailedIndexing += batch.length;
           }
         } catch (error) {
-          console.error(`Failed to process photo ${photo.id}:`, error);
+          console.error(`Failed to process batch starting at ${i}:`, error);
         }
       }
 
       setProcessStatus(
-        `Indexed ${totalFacesIndexed} faces (${totalFailedIndexing} photo failures). Running AWS reclustering...`
+        `✓ Complete! Indexed ${totalFacesIndexed} faces across ${total} photos. All registered visitors have been automatically tagged!`
       );
-
-      // Run reclustering - use reset: true to rebuild all clusters from scratch
-      const reclusterResponse = await fetch("/api/admin/faces/recluster", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          threshold,
-          min_quality: minQuality,
-          method: "aws",
-          reset: true,  // Force full reclustering
-        }),
-      });
-
-      const reclusterData = await reclusterResponse.json();
-      if (reclusterResponse.ok) {
-        setProcessStatus(
-          `✓ Complete! Indexed ${totalFacesIndexed} faces, created ${reclusterData.created_clusters} new clusters (${totalFailedIndexing} photo failures).`
-        );
-        loadStats(); // Refresh stats
-      } else {
-        setProcessStatus(
-          `Indexed ${totalFacesIndexed} faces but reclustering failed: ${reclusterData.error || "Unknown error"}`
-        );
-      }
+      loadStats(); // Refresh stats
     } catch (error) {
       console.error("Processing failed:", error);
-      setProcessStatus("Processing failed due to an error.");
+      setProcessStatus("Processing failed due to a server error.");
     } finally {
       setProcessing(false);
     }
   };
 
-  // Don't show auth check until after hydration to prevent mismatch
-  if (!hydrated) {
-    return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="text-gray-300">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session?.user) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <p className="text-lg">Sign in to access face tools.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="px-5 py-2 rounded-lg bg-[#FFBF00] text-black font-semibold"
-          >
-            Go To Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!hydrated) return null;
 
   return (
-    <div className="min-h-screen bg-black text-white px-6 py-10">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-black">Face Tools</h1>
-          <p className="text-gray-300 mt-3 max-w-3xl">
-            Build and refresh person clusters for Google Photos style People gallery.
-          </p>
-        </div>
-
-        {stats && (
-          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-5">
-            <h3 className="text-lg font-bold text-blue-200 mb-3">Database Stats</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div>
-                <p className="text-gray-400">Total Photos</p>
-                <p className="text-2xl font-bold text-white">{stats.total_photos}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">With Faces</p>
-                <p className="text-2xl font-bold text-green-400">{stats.photos_with_embeddings}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">Without Faces</p>
-                <p className="text-2xl font-bold text-orange-400">{stats.photos_without_embeddings}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">Face Embeddings</p>
-                <p className="text-2xl font-bold text-white">{stats.total_embeddings}</p>
-              </div>
-              <div>
-                <p className="text-gray-400">People Clusters</p>
-                <p className="text-2xl font-bold text-purple-400">{stats.total_clusters}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-xl border border-white/15 bg-white/5 p-5 space-y-4">
-          <h2 className="text-xl font-bold">People Clustering</h2>
-          <p className="text-sm text-gray-300">
-            Run this after bulk uploads or when you want to regenerate all face groups.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Match threshold</label>
-              <input
-                type="number"
-                min={0.1}
-                max={1}
-                step={0.01}
-                value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
-                className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Minimum face quality</label>
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.01}
-                value={minQuality}
-                onChange={(e) => setMinQuality(Number(e.target.value))}
-                className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-white"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={runRecluster}
-              disabled={running}
-              className="px-5 py-2 rounded-lg bg-[#FFBF00] text-black font-semibold disabled:opacity-50"
-            >
-              {running ? "Running..." : "Run Full Reclustering"}
-            </button>
-            <button
-              onClick={testThresholds}
-              disabled={running}
-              className="px-5 py-2 rounded-lg bg-purple-600 text-white font-semibold disabled:opacity-50 hover:bg-purple-700"
-            >
-              {running ? "Testing..." : "Test Thresholds"}
-            </button>
-            <button
-              onClick={() => router.push("/people")}
-              className="px-5 py-2 rounded-lg border border-white/25 text-white hover:bg-white/10"
-            >
-              Open People Gallery
-            </button>
-          </div>
-
-          {status && <p className="text-sm text-yellow-200">{clusterStatus}</p>}
-        </div>
-
-        <div className="rounded-xl border border-white/15 bg-white/5 p-5 space-y-4">
-          <h2 className="text-xl font-bold">Process Existing Photos</h2>
-          <p className="text-sm text-gray-300">
-            Run face detection on photos that were uploaded before the face system was enabled.
-          </p>
-
-          <button
-            onClick={processExistingPhotos}
-            disabled={processing || running}
-            className="px-5 py-2 rounded-lg bg-purple-600 text-white font-semibold disabled:opacity-50 hover:bg-purple-700"
+    <div className="min-h-screen bg-black text-white px-6 py-12">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-10">
+          <Link
+            href="/admin"
+            className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
           >
-            {processing ? "Processing..." : "Process Unprocessed Photos"}
-          </button>
+            ←
+          </Link>
+          <div>
+            <h1 className="text-4xl font-black text-white">
+              AWS Rekognition Pipeline
+            </h1>
+            <p className="text-gray-400 mt-2">
+              Deep-Learning auto-tagging system. Uploaded photos are instantly processed against registered User AWS records.
+            </p>
+          </div>
+        </div>
 
-          {processStatus && (
-            <div className="space-y-2">
-              <p className="text-sm text-purple-200">{processStatus}</p>
-              {processing && processProgress.total > 0 && (
-                <div className="space-y-1">
-                  <div className="w-full bg-white/10 rounded-full h-2">
-                    <div
-                      className="bg-purple-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${(processProgress.current / processProgress.total) * 100}%` }}
-                    />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          {/* Summary Stats */}
+          <div className="bg-gray-900 border border-white/10 rounded-xl p-6 lg:col-span-1 border-purple-500/30">
+            <h2 className="text-xl font-bold mb-6 text-purple-400">Database Status</h2>
+            <ul className="space-y-4">
+              <li className="flex justify-between items-center bg-black/40 p-3 rounded-lg">
+                <span className="text-gray-400">Total Photos</span>
+                <span className="font-mono text-xl">{stats.total_photos.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between items-center bg-black/40 p-3 rounded-lg">
+                <span className="text-gray-400">AWS Faces Indexed</span>
+                <span className="font-mono text-xl">{stats.total_embeddings.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-purple-500/20">
+                <span className="text-gray-400">Auto-Tagged Matches</span>
+                <span className="font-mono text-xl font-bold text-green-400">{stats.total_matches.toLocaleString()}</span>
+              </li>
+              <li className="flex justify-between items-center bg-black/40 p-3 rounded-lg">
+                <span className="text-gray-400">Registered Visitors</span>
+                <span className="font-mono text-xl">{stats.total_visitors.toLocaleString()}</span>
+              </li>
+            </ul>
+            <button
+              onClick={loadStats}
+              className="mt-6 w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-gray-400 transition"
+            >
+              ↻ Refresh Stats
+            </button>
+          </div>
+
+          <div className="lg:col-span-2 grid gap-6">
+            <div className="bg-[#111] border border-white/10 rounded-xl p-6">
+              <h2 className="text-xl font-bold mb-2">Process Uploaded Photos</h2>
+              <p className="text-sm text-gray-400 mb-6">
+                Scan all un-indexed photos in the gallery using AWS Rekognition and auto-tag recognized visitors. This is usually triggered automatically, but you can manually batch-process imports here.
+              </p>
+
+              <button
+                onClick={processExistingPhotos}
+                disabled={processing}
+                className="w-full flex justify-center items-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/30 text-white rounded-lg font-bold transition-colors"
+              >
+                {processing ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  "Scan & Auto-Tag Missing Photos"
+                )}
+              </button>
+
+              {processStatus && (
+                <div className="mt-6 p-4 bg-black/40 border border-blue-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                    <p className="text-sm font-medium text-blue-400">{processStatus}</p>
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {processProgress.current} / {processProgress.total} photos
-                  </p>
+                  {processProgress.total > 0 && (
+                    <div className="mt-4">
+                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                        <span>Progress</span>
+                        <span>{Math.round((processProgress.current / processProgress.total) * 100)}% ({processProgress.current} / {processProgress.total})</span>
+                      </div>
+                      <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden">
+                        <div
+                          className="bg-blue-500 h-4 rounded-full transition-all duration-500 ease-out flex items-center justify-center text-[10px] font-bold text-white relative"
+                          style={{ width: `${Math.max(5, (processProgress.current / processProgress.total) * 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-          <button
-            onClick={() => setShowAdvanced((prev) => !prev)}
-            className="text-sm font-semibold text-white underline"
-          >
-            {showAdvanced ? "Hide" : "Show"} Advanced Query-by-Face Tester
-          </button>
-
-          {showAdvanced && (
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm text-gray-300 mb-2">Event UUID (optional)</label>
-                <input
-                  type="text"
-                  value={eventId}
-                  onChange={(e) => setEventId(e.target.value.trim())}
-                  placeholder="Leave empty for all events"
-                  className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-white"
-                />
-              </div>
-
-              <FaceSearchPanel
-                title="Admin Face Similarity Tester"
-                description="Optional manual search tool for debugging clusters and thresholds."
-                eventId={eventId || null}
-                defaultThreshold={0.35}
-                defaultLimit={80}
-              />
+            
+            <div className="bg-red-900/10 border border-red-500/20 rounded-xl p-6">
+               <h2 className="text-xl font-bold mb-2 text-red-400">Legacy Architecture Removed</h2>
+               <p className="text-sm text-gray-400 mb-0">
+                 The inefficient CPU-bound local scikit-learn face clustering systems (DBSCAN / K-Means) and the respective "recluster" API endpoints were removed. The FMC pipeline now strictly runs on highly-scalable Supervised Classification directly mapped via AWS Rekognition User Collections.
+               </p>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

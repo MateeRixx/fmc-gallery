@@ -65,15 +65,6 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
                 ABOUT US
               </Link>
             </li>
-
-            <li>
-              <Link
-                href="/people"
-                className="text-white hover:text-[#FFBF00] transition"
-              >
-                PEOPLE
-              </Link>
-            </li>
           </div>
 
           <div className="flex items-center space-x-6">
@@ -89,12 +80,21 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
                     {session.user.email?.split("@")[0]}
                   </span>
                 </div>
-                <Link
-                  href="/admin"
-                  className="text-white hover:text-[#FFBF00] transition font-semibold"
-                >
-                  ADMIN
-                </Link>
+                {((session.user as any)?.roleLevel > 0 || (session.user as any)?.roleName !== "VISITOR") ? (
+                  <Link
+                    href="/admin"
+                    className="text-white hover:text-[#FFBF00] transition font-semibold"
+                  >
+                    ADMIN
+                  </Link>
+                ) : (
+                  <Link
+                    href="/visitor/moments"
+                    className="text-white hover:text-[#FFBF00] transition font-semibold"
+                  >
+                    MY PHOTOS
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="group relative h-8 overflow-hidden overflow-x-hidden rounded-md bg-neutral-950 px-6 py-1 text-neutral-50 text-sm font-semibold"

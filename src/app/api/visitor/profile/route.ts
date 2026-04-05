@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { createClient } from "@supabase/supabase-js";
-import { indexFacesFromImageBytes } from "@/lib/awsRekognition";
+import { indexFacesFromImageBytes, createUser, associateFacesToUser } from "@/lib/awsRekognition";
 import { authOptions } from "@/lib/auth";
 import sharp from "sharp";
 
@@ -145,7 +145,40 @@ export async function POST(req: NextRequest) {
 
     const photoUrl = urlData.publicUrl;
 
-    // Step 2: Create visitor profile in database (without AWS face indexing for now)
+    // Step 2: Extract face via AWS Rekognition
+    const awsFaces = await indexFacesFromImageBytes({
+      imageBytes: photoBuffer,
+      externalImageId: `profile_${userId}`,
+      maxFaces: 1, // Only expect one primary face for profile
+    });
+
+    if (!awsFaces || awsFaces.length === 0) {
+      // Clean up: delete uploaded photo if no face
+      await supabase.storage.from("profile-photos").remove([filePath]);
+      return NextResponse.json(
+        { error: "No face detected in the photo. Please upload a clear photo of your face." },
+        { status: 400 }
+      );
+    }
+    
+    if (awsFaces.length > 1) {
+       console.warn(`Warning: ${awsFaces.length} faces detected in profile photo for ${userId}. Using the most prominent one.`);
+    }
+
+    const awsFaceId = awsFaces[0].awsFaceId;
+    const bbox = awsFaces[0].bbox;
+
+    // Create a User grouping in AWS Rekognition for this visitor
+    try {
+      await createUser({ userId });
+      await associateFacesToUser({ userId, faceIds: [awsFaceId] });
+      console.log(`Created AWS User and associated faceId: ${awsFaceId} to user: ${userId}`);
+    } catch (awsUserError) {
+      console.error(`Failed to map AWS Face to User Grouping for ${userId}:`, awsUserError);
+      // We do not fail the request if user grouping fails, we just log it.
+    }
+
+    // Step 3: Create visitor profile in database
     const { data: profile, error: profileError } = await supabase
       .from("visitor_profiles")
       .insert({
@@ -153,7 +186,8 @@ export async function POST(req: NextRequest) {
         full_name: fullName.trim(),
         email: session.user.email,
         profile_photo_url: photoUrl,
-        aws_face_id: null, // Can add AWS indexing later
+        aws_face_id: awsFaceId,
+        // profile_embedding: null // Handled later if vector clustering is used
       })
       .select()
       .single();
@@ -170,7 +204,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`Profile created for user ${userId}: ${profile.id}`);
+    console.log(`Profile created for user ${userId}: ${profile.id} with AWS Face ID: ${awsFaceId}`);
+
+    // Asynchronously find matches using an internal fetch, so we don't block the profile creation response
+    try {
+      fetch(new URL('/api/visitor/matches/sync', req.url).toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ visitorProfileId: profile.id, awsFaceId }),
+      }).catch(e => console.error("Async sync failed to start:", e));
+    } catch (e) {
+      console.error("Could not trigger async match sync:", e);
+    }
 
     return NextResponse.json({
       success: true,

@@ -107,6 +107,22 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
           ADMIN PANEL
         </h1>
 
+        {/* Global Admin Actions */}
+        <div className="mb-12 flex gap-4 justify-center">
+          <button
+            onClick={() => window.location.href = "/admin/faces"}
+            className="px-8 py-4 bg-[#FFBF00] text-black rounded-full transition font-bold shadow-lg shadow-[#FFBF00]/30 hover:bg-[#ffd45f] hover:-translate-y-0.5 hover:shadow-[#FFBF00]/50 active:translate-y-0 active:shadow-[#FFBF00]/30"
+          >
+            ✨ Scan & Auto-Tag Photos
+          </button>
+          <button
+            onClick={() => window.location.href = "/"}
+            className="px-8 py-4 bg-purple-600 text-white rounded-full transition font-bold shadow-lg shadow-purple-500/30 hover:bg-purple-500 hover:-translate-y-0.5 hover:shadow-purple-500/50 active:translate-y-0 active:shadow-purple-500/30"
+          >
+            🏠 Back to Home
+          </button>
+        </div>
+
         {/* Event Management Section */}
         <div className="mb-12 bg-gray-900 p-8 rounded-lg" data-scroll-anchor>
           <h2 className="text-3xl font-bold mb-6">Event Management</h2>
@@ -167,21 +183,6 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-4 justify-center">
-          <button
-            onClick={() => window.location.href = "/admin/faces"}
-            className="px-8 py-4 bg-[#FFBF00] text-black rounded-full transition font-bold shadow-lg shadow-[#FFBF00]/30 hover:bg-[#ffd45f] hover:-translate-y-0.5 hover:shadow-[#FFBF00]/50 active:translate-y-0 active:shadow-[#FFBF00]/30"
-          >
-            Face Search Lab
-          </button>
-          <button
-            onClick={() => window.location.href = "/"}
-            className="px-8 py-4 bg-purple-600 text-white rounded-full transition font-bold shadow-lg shadow-purple-500/30 hover:bg-purple-500 hover:-translate-y-0.5 hover:shadow-purple-500/50 active:translate-y-0 active:shadow-purple-500/30"
-          >
-            Back to Home
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
               .insert({
                 visitor_profile_id: profile.id,
                 photo_id: photos.id,
-                similarity_score: similarity,
+                similarity_score: Math.round(similarity * 100),
                 aws_face_id: awsFaceId,
                 face_bounding_box: null,
               })

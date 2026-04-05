@@ -13,7 +13,7 @@ import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
 import { indexFacesFromImageBytes } from "@/lib/awsRekognition";
-import { mergeNewFacesIntoExistingClusters } from "@/app/api/admin/faces/recluster/route";
+
 import sharp from "sharp";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -260,43 +260,8 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        let clusteringSummary: Record<string, number> | undefined;
-        if (newFaceIds.length > 0) {
-          const clusteringResult = await mergeNewFacesIntoExistingClusters({
-            supabase,
-            newFaceIds,
-            threshold: 0.35,
-            minQuality: 0.45,
-            onProgress: (status) => {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    progress: 100,
-                    current: total,
-                    total,
-                    imported: importedCount,
-                    indexed_faces: indexedFaces,
-                    status,
-                  })}\n\n`
-                )
-              );
-            },
-          });
-
-          if ((clusteringResult as { error?: string }).error) {
-            errors.push(`Clustering: ${(clusteringResult as { error: string }).error}`);
-          } else {
-            const mergedFaces = Number((clusteringResult as { merged_faces?: number }).merged_faces || 0);
-            const newlyClusteredFaces = Number((clusteringResult as { newly_clustered_faces?: number }).newly_clustered_faces || 0);
-            const unmatchedFaces = Number((clusteringResult as { unmatched_faces?: number }).unmatched_faces || 0);
-            clusteringSummary = {
-              merged_faces: mergedFaces,
-              clustered_faces: mergedFaces + newlyClusteredFaces,
-              new_clusters_created: Number((clusteringResult as { new_clusters_created?: number }).new_clusters_created || 0),
-              unmatched_faces: unmatchedFaces,
-            };
-          }
-        }
+        
+        
 
         // Send final result
         controller.enqueue(
@@ -305,8 +270,6 @@ export async function POST(request: NextRequest) {
               complete: true,
               count: importedCount,
               indexed_faces: indexedFaces,
-              clustered_faces: clusteringSummary?.clustered_faces || 0,
-              clustering: clusteringSummary,
               skipped: errors.length,
               errors: errors.length > 0 ? errors : undefined,
             })}\n\n`

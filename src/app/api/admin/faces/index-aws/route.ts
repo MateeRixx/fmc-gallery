@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
-import { indexFacesFromImageBytes } from "@/lib/awsRekognition";
+import { indexFacesFromImageBytes, searchUsersByFaceId } from "@/lib/awsRekognition";
 
 export const runtime = "nodejs";
 
@@ -52,28 +52,34 @@ export async function POST(request: NextRequest) {
     const newFaceIds: number[] = [];
     const failures: Array<{ photo_id: string; error: string }> = [];
 
-    for (const photo of photos) {
-      if (!photo.photo_id || !photo.event_id || !photo.image_url) {
-        return Response.json(
-          { error: "photo_id, event_id, and image_url are required for each photo" },
-          { status: 400 }
-        );
-      }
+    // Early validation for the entire payload
+    const invalidImageIndex = photos.findIndex(p => !p.photo_id || !p.event_id || !p.image_url);
+    if (invalidImageIndex !== -1) {
+      return Response.json(
+        { error: "photo_id, event_id, and image_url are required for each photo" },
+        { status: 400 }
+      );
+    }
 
+    // Process all photos in parallel concurrently rather than sequentially
+    // This allows AWS network calls (fetch, rekognition) to happen simultaneously
+    await Promise.all(photos.map(async (photo) => {
       try {
         const imageUrl = resolveImageUrl(photo.image_url, request.url);
         if (!imageUrl) {
           failures.push({ photo_id: photo.photo_id, error: "Invalid image_url" });
-          continue;
+          return;
         }
 
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) {
+          const fetchErr = `Image fetch failed (${imageResponse.status})`;
+          console.error(`[FETCH ERROR] Photo ${photo.photo_id}:`, fetchErr);
           failures.push({
             photo_id: photo.photo_id,
-            error: `Image fetch failed (${imageResponse.status})`,
+            error: fetchErr,
           });
-          continue;
+          return;
         }
 
         const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (awsFaces.length === 0) {
-          continue;
+          return;
         }
 
         // Keep embedding nullable for AWS-only indexed faces.
@@ -104,8 +110,10 @@ export async function POST(request: NextRequest) {
           .select("id");
 
         if (error) {
-          failures.push({ photo_id: photo.photo_id, error: error.message });
-          continue;
+          const errMsg = `Supabase insert failed: ${error.message}`;
+          console.error(`[INDEXING ERROR] Photo ${photo.photo_id}:`, errMsg);
+          failures.push({ photo_id: photo.photo_id, error: errMsg });
+          return;
         }
 
         // Collect new face IDs for incremental clustering
@@ -114,11 +122,56 @@ export async function POST(request: NextRequest) {
         }
 
         indexedFaces += rows.length;
+
+        // Perform automatic User Matching (Supervised Classification via AWS Users)
+        // Parallellize search constraints over all detected faces as well
+        await Promise.all(awsFaces.map(async (face) => {
+          try {
+            const matchedUsers = await searchUsersByFaceId({
+              awsFaceId: face.awsFaceId,
+              similarityThreshold: 85 // Strict matching for auto-tagging
+            });
+
+            if (matchedUsers.length > 0) {
+              const bestMatch = matchedUsers[0]; // Highest similarity first
+              const userId = bestMatch.userId;
+
+              // Find the profile ID for this user ID
+              const { data: profile } = await supabase
+                .from("visitor_profiles")
+                .select("id")
+                .eq("user_id", userId)
+                .maybeSingle();
+
+              if (profile) {
+                // Instantly tag the user to this photo!
+                const matchRecord = {
+                  visitor_profile_id: profile.id,
+                  photo_id: photo.photo_id,
+                  similarity_score: Math.round(bestMatch.similarity * 100),
+                  face_bounding_box: face.bbox
+                };
+
+                await supabase
+                  .from("user_photo_matches")
+                  .upsert([matchRecord], {
+                    onConflict: "visitor_profile_id, photo_id",
+                    ignoreDuplicates: true
+                  });
+
+                console.log(`Auto-tagged user ${userId} to photo ${photo.photo_id} (Score: ${bestMatch.similarity}%)`);
+              }
+            }
+          } catch (matchErr) {
+            console.error(`Failed to finding matching user for face ${face.awsFaceId}:`, matchErr);
+          }
+        }));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        console.error(`[AWS INDEXING ERROR] Photo ${photo.photo_id}:`, message);
         failures.push({ photo_id: photo.photo_id, error: message });
       }
-    }
+    }));
 
     return Response.json({
       ok: true,

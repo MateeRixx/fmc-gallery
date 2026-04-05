@@ -4,6 +4,10 @@ import {
   RekognitionClient,
   SearchFacesCommand,
   SearchFacesCommandOutput,
+  CreateUserCommand,
+  AssociateFacesCommand,
+  SearchUsersCommand,
+  SearchUsersCommandOutput,
 } from "@aws-sdk/client-rekognition";
 
 const awsRegion = process.env.AWS_REGION || "us-east-1";
@@ -154,4 +158,67 @@ export async function searchFacesByFaceId(params: {
       };
     })
     .filter((row): row is { awsFaceId: string; similarity: number } => row !== null);
+}
+
+export async function createUser(params: { userId: string }) {
+  const rekognition = createRekognitionClient();
+  try {
+    await rekognition.send(
+      new CreateUserCommand({
+        CollectionId: collectionId,
+        UserId: params.userId,
+      })
+    );
+    return { created: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ResourceAlreadyExistsException")) {
+      return { created: false };
+    }
+    throw error;
+  }
+}
+
+export async function associateFacesToUser(params: { userId: string; faceIds: string[] }) {
+  const rekognition = createRekognitionClient();
+  const response = await rekognition.send(
+    new AssociateFacesCommand({
+      CollectionId: collectionId,
+      UserId: params.userId,
+      FaceIds: params.faceIds,
+    })
+  );
+
+  return {
+    associatedFaces: response.AssociatedFaces || [],
+    unsuccessfulFaceAssociations: response.UnsuccessfulFaceAssociations || [],
+  };
+}
+
+export async function searchUsersByFaceId(params: {
+  awsFaceId: string;
+  similarityThreshold?: number;
+  maxUsers?: number;
+}) {
+  const rekognition = createRekognitionClient();
+  const response = await rekognition.send(
+    new SearchUsersCommand({
+      CollectionId: collectionId,
+      FaceId: params.awsFaceId,
+      UserMatchThreshold: params.similarityThreshold ?? 80,
+      MaxUsers: params.maxUsers ?? 10,
+    })
+  );
+
+  return (response.UserMatches || [])
+    .map((match) => {
+      if (!match.User?.UserId || typeof match.Similarity !== "number") {
+        return null;
+      }
+      return {
+        userId: match.User.UserId,
+        similarity: match.Similarity,
+      };
+    })
+    .filter((row): row is { userId: string; similarity: number } => row !== null);
 }

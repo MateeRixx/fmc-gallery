@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
           .map((result) => ({
             visitor_profile_id: profile.id,
             aws_face_id: result.awsFaceId,
-            similarity_score: Math.round(result.similarity),
+            similarity_score: Math.round(result.similarity * 100),
             face_bounding_box: null,
             // Link to the photo that contains this face
             // For now, we'll link based on external ID

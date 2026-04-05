@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import AddPhotoButton from "@/components/AddPhotoButton";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import Lightbox from "@/components/Lightbox";
 
 export type EventData = {
   id: string;
@@ -24,7 +25,6 @@ function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSe
       width={800}
       height={600}
       loading="lazy"
-      unoptimized
       sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
       onError={() => setVisible(false)}
       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
@@ -33,6 +33,7 @@ function GalleryImage({ src, alt, isSelected }: { src: string; alt: string; isSe
 }
 
 export default function EventGalleryClient({ slug, event }: { slug: string; event: EventData }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -173,17 +174,16 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
         <div className="relative z-10 max-w-5xl">
           <h1 className="text-6xl md:text-9xl font-black text-white drop-shadow-2xl mb-8">{event.name}</h1>
           <p className="text-lg md:text-2xl text-gray-200 leading-relaxed max-w-4xl mx-auto mb-10">{event.description}</p>
-
-          {/* Explore with Faces Button */}
-          <Link
-            href={`/events/${slug}/faces`}
-            className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#FFBF00] to-[#FF9500] text-black font-bold text-lg shadow-2xl shadow-[#FFBF00]/30 hover:shadow-[#FFBF00]/50 hover:scale-105 transition-all duration-300"
-          >
-            <span className="text-2xl">👤</span>
-            Explore with Faces
-          </Link>
         </div>
       </section>
+
+      <Lightbox
+        isOpen={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+        images={galleryImages as string[]}
+        currentIndex={lightboxIndex ?? 0}
+        onNavigate={setLightboxIndex}
+      />
       <section className="py-20 px-6 bg-black">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-12">
@@ -234,7 +234,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
               >
                 <div
                   className="group relative overflow-hidden rounded-2xl shadow-2xl transition-transform duration-300 hover:-translate-y-1 cursor-pointer select-none"
-                  onClick={() => isSelectionMode && toggleImageSelection(i)}
+                  onClick={() => isSelectionMode ? toggleImageSelection(i) : setLightboxIndex(i)}
                   onMouseDown={() => handleImageMouseDown(i)}
                   onMouseUp={() => handleImageMouseUp(i)}
                   onMouseLeave={() => handleImageMouseUp(i)}
@@ -282,6 +282,14 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
           </div>
         </div>
       </section>
+
+      <Lightbox
+        isOpen={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+        images={galleryImages as string[]}
+        currentIndex={lightboxIndex ?? 0}
+        onNavigate={setLightboxIndex}
+      />
     </>
   );
 }

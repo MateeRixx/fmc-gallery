@@ -76,9 +76,17 @@ export const authOptions: NextAuthOptions = {
         if (token.userId) {
           const membership = await getUserMembership(token.userId as string);
           const roleLevel = await getUserRoleLevel(token.userId as string);
+          
+          const { data: userRec } = await supabase
+            .from("users")
+            .select("role, permissions")
+            .eq("id", token.userId)
+            .single();
 
           token.roleLevel = roleLevel;
           token.roleName = ROLE_LEVEL_NAMES[roleLevel];
+          token.role = userRec?.role || (ROLE_LEVEL_NAMES[roleLevel] || "VISITOR").toLowerCase();
+          token.permissions = userRec?.permissions || [];
           token.isActive = membership?.is_active ?? false;
           token.isMaster = (token.email as string)?.toLowerCase() === MASTER_EMAIL.toLowerCase();
         }
@@ -97,6 +105,8 @@ export const authOptions: NextAuthOptions = {
           session.user.id = (token.userId as string) || "";
           session.user.roleLevel = (token.roleLevel as number) || 0;
           session.user.roleName = (token.roleName as string) || "VISITOR";
+          session.user.role = (token.role as string) || "visitor";
+          session.user.permissions = (token.permissions as string[]) || [];
           session.user.isActive = (token.isActive as boolean) || false;
           session.user.isMaster = (token.isMaster as boolean) || false;
         }
