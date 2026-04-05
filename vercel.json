@@ -2,12 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "src/app/api/admin/faces/recluster/route.ts": {
-      "maxDuration": 300,
-      "memory": 3008
+      "maxDuration": 60
     },
     "src/app/api/admin/import-from-drive/route.ts": {
-      "maxDuration": 300,
-      "memory": 3008
+      "maxDuration": 60
     }
   },
   "crons": []
