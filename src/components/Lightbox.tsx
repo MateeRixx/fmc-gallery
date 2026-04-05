@@ -40,23 +40,23 @@ export default function Lightbox({ isOpen, onClose, images, currentIndex, onNavi
         <>
           <button 
             onClick={(e) => { e.stopPropagation(); onNavigate((currentIndex - 1 + images.length) % images.length); }}
-            className="absolute left-6 z-50 p-3 text-white/70 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition hidden md:block"
+            className="absolute left-2 sm:left-6 z-50 p-2 sm:p-3 text-white/70 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition"
           >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
 
-          <button 
-            onClick={(e) => { e.stopPropagation(); onNavigate((currentIndex + 1) % images.length); }}
-            className="absolute right-6 z-50 p-3 text-white/70 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition hidden md:block"
-          >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </>
-      )}
+          <button
+  onClick={(e) => { e.stopPropagation(); onNavigate((currentIndex + 1) % images.length); }}
+  className="absolute right-2 sm:right-6 z-50 p-2 sm:p-3 text-white/70 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition"
+>
+  <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+</button>
+</>
+)}
 
       <div className="relative w-full h-full flex items-center justify-center p-4 md:p-12" onClick={onClose}>
         <div 

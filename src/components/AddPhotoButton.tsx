@@ -324,8 +324,8 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {  
       </button>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-gray-700 space-y-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh] p-6 sm:p-8 border border-gray-700 space-y-6">
 
             {/* Header */}
             <div className="flex items-center justify-between">

@@ -160,7 +160,7 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
     <>
       <Navbar />
       <AddPhotoButton eventSlug={slug} />
-      <section className="relative min-h-screen flex items-center justify-center text-center px-6">
+      <section className="relative min-h-[70vh] md:min-h-screen flex items-center justify-center text-center px-4 sm:px-6">
         <Image
           src={event.bgImage}
           alt={event.name}
@@ -171,9 +171,9 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
           className="object-cover brightness-50"
         />
         <div className="absolute inset-0 bg-black/60" />
-        <div className="relative z-10 max-w-5xl">
-          <h1 className="text-6xl md:text-9xl font-black text-white drop-shadow-2xl mb-8">{event.name}</h1>
-          <p className="text-lg md:text-2xl text-gray-200 leading-relaxed max-w-4xl mx-auto mb-10">{event.description}</p>
+        <div className="relative z-10 w-full max-w-5xl mx-auto">
+          <h1 className="text-5xl sm:text-6xl md:text-9xl font-black text-white drop-shadow-2xl mb-4 md:mb-8">{event.name}</h1>
+          <p className="text-base sm:text-lg md:text-2xl text-gray-200 leading-relaxed max-w-4xl mx-auto mb-6 md:mb-10 px-2">{event.description}</p>
         </div>
       </section>
 
@@ -184,10 +184,10 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
         currentIndex={lightboxIndex ?? 0}
         onNavigate={setLightboxIndex}
       />
-      <section className="py-20 px-6 bg-black">
+      <section className="py-12 md:py-20 px-4 sm:px-6 bg-black">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-12">
-            <h2 className="text-5xl font-bold text-white">Gallery</h2>
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-8 md:mb-12 gap-4 sm:gap-0">
+            <h2 className="text-4xl md:text-5xl font-bold text-white">Gallery</h2>
             {galleryImages.length > 0 && (
               <div className="flex items-center gap-4">
                 {!isSelectionMode ? (

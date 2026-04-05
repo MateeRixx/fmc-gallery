@@ -2,11 +2,11 @@
 
 export default function HeroSection({ onExploreClick }: { onExploreClick: () => void }) {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6">
-      <h1 className="mb-4 text-6xl md:text-8xl lg:text-8xl font-black text-white drop-shadow-2xl tracking-tighter">
+    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 sm:px-6">
+      <h1 className="mb-4 text-4xl sm:text-6xl md:text-8xl font-black text-white drop-shadow-2xl tracking-tighter">
         THE FILM & MEDIA CLUB
       </h1>
-      <p className="mb-10 text-2xl md:text-4xl text-white/90 font-medium drop-shadow-lg">
+      <p className="mb-10 text-lg sm:text-2xl md:text-4xl text-white/90 font-medium drop-shadow-lg max-w-4xl mx-auto leading-snug">
         RAJIV GANDHI INSTITUTE OF PETROLEUM TECHNOLOGY
       </p>
       <button 
