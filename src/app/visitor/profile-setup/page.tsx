@@ -2,7 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 
 export default function ProfileSetupPage() {
@@ -44,16 +44,6 @@ export default function ProfileSetupPage() {
 
     checkProfile();
   }, [status, router]);
-
-  // Cleanup camera on unmount
-  useEffect(() => {
-    return () => {
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach((track) => track.stop());
-      }
-    };
-  }, []);
 
   const startCamera = async () => {
     try {
@@ -253,17 +243,10 @@ export default function ProfileSetupPage() {
                   <div className="flex flex-col gap-4 w-full max-w-[320px]">
                     {/* Camera/Preview Area */}
                     <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black border-2 border-gray-300">
-                      {/* Video Stream */}
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
-                      />
+
 
                       {/* Preview Image */}
-                      {!cameraActive && preview && (
+                      {preview && (
                         <Image
                           src={preview}
                           alt="Profile preview"
@@ -273,7 +256,7 @@ export default function ProfileSetupPage() {
                       )}
 
                       {/* No Camera/No Preview State */}
-                      {!cameraActive && !preview && (
+                      {!preview && (
                         <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                           <div className="text-center">
                             <svg
@@ -296,7 +279,7 @@ export default function ProfileSetupPage() {
                               />
                             </svg>
                             <p className="text-sm font-medium text-gray-700">
-                              Click "Start Camera" below
+                              Click &quot;Start Camera&quot; below
                             </p>
                           </div>
                         </div>
@@ -312,19 +295,37 @@ export default function ProfileSetupPage() {
                         </div>
                       )}
 
-                      <canvas ref={canvasRef} className="hidden" />
+
                     </div>
 
                     {/* Control Buttons */}
                     <div className="flex gap-2 flex-col w-full">
-                      {!cameraActive && !preview && (
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                          📷 Start Camera
-                        </button>
+                      {!preview && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                          >
+                            📷 Start Camera
+                          </button>
+                          
+                          <div className="relative w-full">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleFileUpload}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              title="Upload Photo"
+                            />
+                            <button
+                              type="button"
+                              className="w-full px-6 py-3 bg-white text-gray-700 rounded-lg font-semibold border-2 border-gray-300 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                            >
+                              📁 Upload Photo
+                            </button>
+                          </div>
+                        </>
                       )}
 
                       {cameraActive && (
@@ -361,8 +362,8 @@ export default function ProfileSetupPage() {
 
                     {cameraActive && (
                       <div className="text-xs text-center text-gray-600 bg-blue-50 p-2 rounded">
-                        Position your face in the circle, then click "Capture
-                        Photo"
+                        Position your face in the circle, then click &quot;Capture
+                        Photo&quot;
                       </div>
                     )}
                   </div>
@@ -433,7 +434,7 @@ export default function ProfileSetupPage() {
                         <p className="text-sm text-blue-800">
                           We&apos;ll use facial recognition to find all photos from
                           our events that contain your face. Your privacy is
-                          protected - you'll only see photos with you in them.
+                          protected - you&apos;ll only see photos with you in them.
                         </p>
                       </div>
                     </div>
