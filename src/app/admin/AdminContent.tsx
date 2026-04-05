@@ -27,6 +27,7 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
   const { data: session, status } = useSession();
   const [events, setEvents] = useState<AdminEvent[]>(initial);
   const [editingId, setEditingId] = useState<number | string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -46,7 +47,8 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
       });
       if (res.status === 401 || res.status === 403) {
         // Unauthorized - session likely expired, redirect to login
-        await signOut({ redirect: true, callbackUrl: "/login" });
+        setAuthError("You don't have permission to manage events.");
+        setEvents([]);
         return;
       }
       if (!res.ok) {
@@ -55,6 +57,7 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
         return;
       }
       const j = await res.json();
+      setAuthError(null);
       setEvents((j && j.data) || []);
     } catch (err) {
       console.error("Failed to fetch events:", err);
@@ -123,13 +126,21 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
           </button>
         </div>
 
-        {/* Event Management Section */}
-        <div className="mb-12 bg-gray-900 p-8 rounded-lg" data-scroll-anchor>
-          <h2 className="text-3xl font-bold mb-6">Event Management</h2>
-          <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading form...</div>}>
-            <AdminForm editingId={editingId} onSuccess={fetchEvents} />
-          </Suspense>
-        </div>
+        {authError ? (
+          <div className="mb-12 bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-lg text-center font-semibold">
+            ⚠️ {authError}
+          </div>
+        ) : (
+          <>
+            {/* Event Management Section */}
+            <div className="mb-12 bg-gray-900 p-8 rounded-lg" data-scroll-anchor>
+              <h2 className="text-3xl font-bold mb-6">Event Management</h2>
+              <Suspense fallback={<div className="text-center text-gray-400 py-10">Loading form...</div>}>
+                <AdminForm editingId={editingId} onSuccess={fetchEvents} />
+              </Suspense>
+            </div>
+          </>
+        )}
 
         {/* User Management Section - Only for Head and Co-Head */}
         {session?.user && ((session.user as any)?.roleLevel >= 2) && (
@@ -153,35 +164,37 @@ export default function AdminContent({ events: initial }: { events: AdminEvent[]
         )}
 
         {/* Existing Events Section */}
-        <div className="mb-12 bg-gray-900 p-8 rounded-lg">
-          <h2 className="text-3xl font-bold mb-6">Existing Events</h2>
-          {events.length === 0 ? (
-            <p className="text-gray-400">No events yet. Create one above.</p>
-          ) : (
-            <div className="space-y-4">
-              {events.map((ev) => (
-                <div key={ev.id} className="flex items-center gap-4 p-4 bg-gray-800 rounded">
-                  <span className="text-lg flex-1">{ev.title || "(untitled)"}</span>
-                  <button
-                    onClick={() => {
-                      setEditingId(ev.id);
-                      document.querySelector('[data-scroll-anchor]')?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    className="px-4 py-2 bg-blue-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-blue-500 shadow-md hover:shadow-blue-500/40 focus:shadow-blue-500/60 focus:outline-none"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deleteEvent(ev.id)}
-                    className="px-4 py-2 bg-red-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-red-500 shadow-md hover:shadow-red-500/40 focus:shadow-red-500/60 focus:outline-none"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {!authError && (
+          <div className="mb-12 bg-gray-900 p-8 rounded-lg">
+            <h2 className="text-3xl font-bold mb-6">Existing Events</h2>
+            {events.length === 0 ? (
+              <p className="text-gray-400">No events yet. Create one above.</p>
+            ) : (
+              <div className="space-y-4">
+                {events.map((ev) => (
+                  <div key={ev.id} className="flex items-center gap-4 p-4 bg-gray-800 rounded">
+                    <span className="text-lg flex-1">{ev.title || "(untitled)"}</span>
+                    <button
+                      onClick={() => {
+                        setEditingId(ev.id);
+                        document.querySelector('[data-scroll-anchor]')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="px-4 py-2 bg-blue-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-blue-500 shadow-md hover:shadow-blue-500/40 focus:shadow-blue-500/60 focus:outline-none"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteEvent(ev.id)}
+                      className="px-4 py-2 bg-red-600 rounded transition duration-150 ease-out transform hover:scale-105 hover:-translate-y-0.5 hover:bg-red-500 shadow-md hover:shadow-red-500/40 focus:shadow-red-500/60 focus:outline-none"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>
