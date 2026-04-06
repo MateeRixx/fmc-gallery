@@ -182,7 +182,10 @@ export default function EventGalleryClient({ slug, event }: { slug: string; even
       const response = await fetch("/api/admin/photos", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photo_paths: selectedUrls }),
+        body: JSON.stringify({ 
+          photo_paths: selectedUrls,
+          event_slug: slug 
+        }),
       });
 
       const data = await response.json();

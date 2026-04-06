@@ -86,90 +86,135 @@ export async function DELETE(request: NextRequest) {
     }
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const body = await request.json();
-    const { photo_id, photo_ids, photo_paths } = body || {};
+      const body = await request.json();
+      const { photo_id, photo_ids, photo_paths, event_slug } = body || {};
 
-    if (!photo_id && (!photo_ids || !Array.isArray(photo_ids) || photo_ids.length === 0) && (!photo_paths || !Array.isArray(photo_paths) || photo_paths.length === 0)) {
-      return Response.json({ error: "Missing photo_id, photo_ids, or photo_paths" }, { status: 400 });
-    }
-
-    let idsToDelete: string[] = [];
-    let photosToDelete: any[] = [];
-
-    if (photo_paths && Array.isArray(photo_paths) && photo_paths.length > 0) {
-      // Find photos by path
-      const { data: foundPhotos, error: fetchError } = await supabase
-        .from("photos")
-        .select("id, path")
-        .in("path", photo_paths);
-
-      if (fetchError || !foundPhotos || foundPhotos.length === 0) {
-        return Response.json({ error: "Photos not found by path" }, { status: 404 });
+      if (!photo_id && (!photo_ids || !Array.isArray(photo_ids) || photo_ids.length === 0) && (!photo_paths || !Array.isArray(photo_paths) || photo_paths.length === 0)) {
+        return Response.json({ error: "Missing photo_id, photo_ids, or photo_paths" }, { status: 400 });
       }
-      photosToDelete = foundPhotos;
-      idsToDelete = foundPhotos.map(p => p.id);
-    } else {
-      idsToDelete = photo_id ? [photo_id] : photo_ids;
-      
-      // Fetch the paths to delete from storage later
-      const { data: foundPhotos, error: fetchError } = await supabase
-        .from("photos")
-        .select("id, path")
-        .in("id", idsToDelete);
 
-      if (fetchError || !foundPhotos || foundPhotos.length === 0) {
-        return Response.json({ error: "Photos not found or fetch error" }, { status: 404 });
-      }
-      photosToDelete = foundPhotos;
-    }
+      let idsToDelete: string[] = [];
+      let photosToDelete: any[] = [];
+      let pathsToCleanupFromStorage: string[] = [];
 
-    console.log(`[DELETE PHOTO] Admin ${user.email} deleting photos: ${idsToDelete.join(", ")}`);
-
-    // First, delete related face embeddings and cluster data
-    const { error: faceDeleteError } = await supabase
-      .from("face_embeddings")
-      .delete()
-      .in("photo_id", idsToDelete);
-
-    if (faceDeleteError) {
-      console.error("Failed to delete face embeddings:", faceDeleteError);
-      // Continue anyway - photo deletion is more important
-    }
-
-    // Delete the photo records
-    const { error: photoDeleteError } = await supabase
-      .from("photos")
-      .delete()
-      .in("id", idsToDelete);
-
-    if (photoDeleteError) {
-      return Response.json({
-        error: photoDeleteError.message || "Failed to delete photos"
-      }, { status: 500 });
-    }
-
-    // Delete the actual image files from Supabase Storage
-    const pathsToDelete = photosToDelete.map(p => {
-      if (!p.path) return null;
-      // Extract relative path from Supabase full URL if necessary
-      if (p.path.includes("/storage/v1/object/public/event-images/")) {
-        return p.path.split("/storage/v1/object/public/event-images/")[1];
-      }
-      return p.path;
-    }).filter(Boolean);
-
-    if (pathsToDelete.length > 0) {
-      const { error: storageError } = await supabase.storage
-        .from("event-images")
-        .remove(pathsToDelete as string[]);
+      if (photo_paths && Array.isArray(photo_paths) && photo_paths.length > 0) {
+        pathsToCleanupFromStorage = [...photo_paths];
         
-      if (storageError) {
-        console.error("Failed to delete photo files from storage:", storageError.message);
+        // Find photos by path
+        const { data: foundPhotos, error: fetchError } = await supabase
+          .from("photos")
+          .select("id, path, event_id")
+          .in("path", photo_paths);
+
+        if (!fetchError && foundPhotos && foundPhotos.length > 0) {
+          photosToDelete = foundPhotos;
+          idsToDelete = foundPhotos.map(p => p.id);
+        }
+      } else {
+        idsToDelete = photo_id ? [photo_id] : photo_ids;
+        
+        // Fetch the paths to delete from storage later
+        const { data: foundPhotos, error: fetchError } = await supabase
+          .from("photos")
+          .select("id, path, event_id")
+          .in("id", idsToDelete);
+
+        if (fetchError || !foundPhotos || foundPhotos.length === 0) {
+          return Response.json({ error: "Photos not found or fetch error" }, { status: 404 });
+        }
+        photosToDelete = foundPhotos;
+        pathsToCleanupFromStorage = foundPhotos.map(p => p.path).filter(Boolean) as string[];
+      }
+
+      console.log(`[DELETE PHOTO] Admin ${user.email} deleting photos. DB IDs: ${idsToDelete.join(", ")}`);
+
+      if (idsToDelete.length > 0) {
+        // First, delete related face embeddings and cluster data
+        const { error: faceDeleteError } = await supabase
+          .from("face_embeddings")
+          .delete()
+          .in("photo_id", idsToDelete);
+
+        if (faceDeleteError) {
+          console.error("Failed to delete face embeddings:", faceDeleteError);
+          // Continue anyway - photo deletion is more important
+        }
+
+        // Delete the photo records
+        const { error: photoDeleteError } = await supabase
+          .from("photos")
+          .delete()
+          .in("id", idsToDelete);
+
+        if (photoDeleteError) {
+          return Response.json({
+            error: photoDeleteError.message || "Failed to delete photos"
+          }, { status: 500 });
+        }
+      }
+
+      // Delete the actual image files from Supabase Storage
+      const bucketPaths = new Map<string, string[]>();
+
+      pathsToCleanupFromStorage.forEach(pPath => {
+        if (!pPath) return;
+        let bucketName = "event-images"; // default
+        let relPath = pPath;
+        
+        const storagePrefix = "/storage/v1/object/public/";
+        if (pPath.includes(storagePrefix)) {
+          const afterPrefix = pPath.split(storagePrefix)[1];
+          const parts = afterPrefix.split("/");
+          bucketName = parts[0];
+          relPath = parts.slice(1).join("/");
+        }
+
+        const decodedPath = decodeURIComponent(relPath);
+        if (!bucketPaths.has(bucketName)) {
+          bucketPaths.set(bucketName, []);
+        }
+        bucketPaths.get(bucketName)!.push(decodedPath);
+      });
+
+    for (const [bucket, paths] of bucketPaths.entries()) {
+      if (paths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from(bucket)
+          .remove(paths);
+          
+        if (storageError) {
+          console.error(`Failed to delete photo files from storage bucket ${bucket}:`, storageError.message);
+        }
       }
     }
 
-    console.log(`[DELETE PHOTO] Successfully deleted ${idsToDelete.length} photos and related face data`);
+    // Revalidate cache for the affected events
+    const uniqueEventIds = [...new Set(photosToDelete.map(p => p.event_id).filter(Boolean))];
+    if (uniqueEventIds.length > 0) {
+      const { data: eventsList } = await supabase
+        .from("events")
+        .select("slug")
+        .in("id", uniqueEventIds);
+        
+      if (eventsList) {
+        eventsList.forEach(e => {
+          if (e.slug) {
+             revalidatePath(`/events/${e.slug}`);
+             revalidatePath(`/events/${e.slug}`, "page");
+          }
+        });
+      }
+    }
+
+    // Always fallback to trying to revalidate the event slug sent from the client
+    if (event_slug) {
+       revalidatePath(`/events/${event_slug}`);
+       revalidatePath(`/events/${event_slug}`, "page");
+    }
+
+    console.log(`[DELETE PHOTO] Successfully deleted ${idsToDelete.length} DB records and ${pathsToCleanupFromStorage.length} storage files`);
     revalidatePath(`/events`);
+    revalidatePath(`/events`, "page");
 
     return Response.json({
       ok: true,
