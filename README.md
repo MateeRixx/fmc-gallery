@@ -2,7 +2,7 @@
 
 A modern, responsive event gallery application for the **Film & Media Club (FMC)** at RGIPT. Built with Next.js, Supabase, and Tailwind CSS, this platform allows club members to showcase their events through beautiful photo galleries.
 
-🔗 **Live Demo:** [https://fmc-gallery.vercel.app/](https://fmc-gallery.vercel.app/)
+🔗 **Live Demo:** [https://www.fmc-rgipt.in/](https://www.fmc-rgipt.in/)
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript)
