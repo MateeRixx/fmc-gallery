@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "Film & Media Club • RGIPT",
   description: "Official website of FMC RGIPT",
   icons: {
-    icon: '/icons/favicon.ico',
+    icon: '/icons/favicon.ico?v=2',
   },
 }
 
