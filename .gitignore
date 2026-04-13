@@ -157,3 +157,8 @@ vite.config.ts.timestamp-*
 # vercel
 .vercel
 .env.local
+
+# pem-file directory yeh folder add karne ka tarika hai 
+pem-file/  
+
+.fmc-gallery-key.pem

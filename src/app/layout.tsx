@@ -6,6 +6,9 @@ import SessionProvider from "@/components/providers/SessionProvider";
 export const metadata: Metadata = {
   title: "Film & Media Club • RGIPT",
   description: "Official website of FMC RGIPT",
+  icons: {
+    icon: '/icons/favicon.ico',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
