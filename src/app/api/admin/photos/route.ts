@@ -50,7 +50,9 @@ export async function POST(request: NextRequest) {
         const payload = data.map((photo) => ({
           photo_id: photo.id,
           event_id: photo.event_id,
-          image_url: supabase.storage.from("events").getPublicUrl(photo.path).data.publicUrl
+          image_url: photo.path.startsWith('http') 
+            ? photo.path 
+            : supabase.storage.from("events").getPublicUrl(photo.path).data.publicUrl
         }));
 
         fetch(new URL("/api/admin/faces/index-aws", request.url).toString(), {

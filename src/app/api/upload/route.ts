@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
 import { Permission } from "@/types";
@@ -55,15 +56,38 @@ export async function POST(request: Request) {
       .jpeg({ quality: 75, mozjpeg: true })
       .toBuffer();
 
-    const { error } = await supabase.storage
-      .from("event-images")
-      .upload(path, compressedBuffer, { contentType: mimeToExt });
-    if (error) {
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const region = process.env.AWS_S3_REGION || process.env.AWS_REGION || "us-east-1";
+
+    if (!bucketName || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+      return Response.json({ error: "AWS credentials or bucket name missing" }, { status: 500 });
+    }
+
+    const s3 = new S3Client({
+      region,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }
+    });
+
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: path,
+        Body: compressedBuffer,
+        ContentType: mimeToExt,
+      }));
+    } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
 
-    const { data } = supabase.storage.from("event-images").getPublicUrl(path);
-    return Response.json({ url: data.publicUrl });
+    const cdnDomain = process.env.NEXT_PUBLIC_CDN_DOMAIN;
+    const publicUrl = cdnDomain 
+      ? `https://${cdnDomain}/${path}`
+      : `https://${bucketName}.s3.${region}.amazonaws.com/${path}`;
+    
+    return Response.json({ url: publicUrl });
   } catch {
     return Response.json({ error: "Upload failed" }, { status: 500 });
   }
