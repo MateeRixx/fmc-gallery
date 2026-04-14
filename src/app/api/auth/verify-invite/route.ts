@@ -1,12 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function GET(request: Request) {
   try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const url = new URL(request.url);
     const token = url.searchParams.get("token");
 
@@ -22,8 +22,9 @@ export async function GET(request: Request) {
       .single();
 
     if (error || !invite) {
+      console.error("verify-invite error:", error);
       return Response.json(
-        { error: "Invitation not found" },
+        { error: "Invitation not found", details: error?.message || "No invite returned" },
         { status: 404 }
       );
     }

@@ -63,7 +63,8 @@ export async function sendInvitationEmail({
   invitedBy: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL}/invite?token=${invitationToken}`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const inviteLink = `${baseUrl}/invite?token=${invitationToken}`;
     const roleDisplay =
       role === "head"
         ? "Head"
