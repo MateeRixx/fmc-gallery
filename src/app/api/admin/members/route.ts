@@ -67,7 +67,9 @@ export async function GET(request: Request) {
 
     // Transform response: flatten membership data
     const transformedMembers = members.map((member: any) => {
-      const membership = member.memberships?.[0];
+      const membership = Array.isArray(member.memberships) 
+        ? member.memberships[0] 
+        : member.memberships;
       return {
         id: member.id,
         email: member.email,
@@ -75,8 +77,8 @@ export async function GET(request: Request) {
         created_at: member.created_at,
         role_level: membership?.role_level ?? 0,
         is_active: membership?.is_active ?? false,
-        membership_start: membership?.start_date,
-        membership_end: membership?.end_date,
+        start_date: membership?.start_date || member.created_at,
+        end_date: membership?.end_date,
       };
     });
 

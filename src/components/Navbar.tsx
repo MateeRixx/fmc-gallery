@@ -80,19 +80,18 @@ export default function Navbar({ onEventsClick, onHomeClick }: NavbarProps) {
                     {session.user.email?.split("@")[0]}
                   </span>
                 </div>
-                {((session.user as any)?.roleLevel > 0 || (session.user as any)?.roleName !== "VISITOR") ? (
+                <Link
+                  href="/visitor/moments"
+                  className="text-white hover:text-[#FFBF00] transition font-semibold"
+                >
+                  MY PHOTOS
+                </Link>
+                {((session.user as any)?.roleLevel > 0 || (session.user as any)?.roleName !== "VISITOR") && (
                   <Link
                     href="/admin"
                     className="text-white hover:text-[#FFBF00] transition font-semibold"
                   >
                     ADMIN
-                  </Link>
-                ) : (
-                  <Link
-                    href="/visitor/moments"
-                    className="text-white hover:text-[#FFBF00] transition font-semibold"
-                  >
-                    MY PHOTOS
                   </Link>
                 )}
                 <button

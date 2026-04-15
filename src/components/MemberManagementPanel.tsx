@@ -52,7 +52,7 @@ export default function MemberManagementPanel() {
       }
 
       const data = await response.json();
-      setMembers(data.data || []);
+      setMembers(data.members || data.data || []);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch members");

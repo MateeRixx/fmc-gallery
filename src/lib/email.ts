@@ -88,7 +88,11 @@ export async function sendInvitationEmail({
               Accept Invitation
             </a>
           </p>
-          <p style="color: #666; font-size: 12px;">Or copy this link: <br/><code style="word-break: break-all;">${inviteLink}</code></p>
+          <p style="color: #666; font-size: 14px;">If you prefer manually signing up via the app, here is your invitation token code:</p>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; text-align: center; margin: 15px 0;">
+            <code style="word-break: break-all; color: #333; font-size: 16px; user-select: all;">${invitationToken}</code>
+          </div>
+          <p style="color: #666; font-size: 12px;">Or copy the direct link: <br/><code style="word-break: break-all;">${inviteLink}</code></p>
           <p style="color: #666; font-size: 12px;">This invitation expires in 7 days.</p>
         </div>
       `,

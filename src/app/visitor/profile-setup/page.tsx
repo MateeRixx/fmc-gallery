@@ -255,8 +255,19 @@ export default function ProfileSetupPage() {
                         />
                       )}
 
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`w-full h-full object-cover transform scale-x-[-1] ${
+                          cameraActive && !preview ? "block" : "hidden"
+                        }`}
+                      />
+                      <canvas ref={canvasRef} className="hidden" />
+
                       {/* No Camera/No Preview State */}
-                      {!preview && (
+                      {!preview && !cameraActive && (
                         <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                           <div className="text-center">
                             <svg
@@ -286,7 +297,7 @@ export default function ProfileSetupPage() {
                       )}
 
                       {/* Face Alignment Guide (when camera is active) */}
-                      {cameraActive && (
+                      {cameraActive && !preview && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-32 h-40 border-4 border-yellow-400 rounded-full opacity-70"></div>
                           <div className="absolute top-8 text-white text-xs font-medium bg-black/50 px-3 py-1 rounded">
@@ -300,7 +311,7 @@ export default function ProfileSetupPage() {
 
                     {/* Control Buttons */}
                     <div className="flex gap-2 flex-col w-full">
-                      {!preview && (
+                      {!preview && !cameraActive && (
                         <>
                           <button
                             type="button"
@@ -409,7 +420,7 @@ export default function ProfileSetupPage() {
                       className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Email is linked to your Google account
+                      Email is linked to your account
                     </p>
                   </div>
 
