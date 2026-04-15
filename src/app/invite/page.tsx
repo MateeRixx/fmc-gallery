@@ -29,10 +29,10 @@ function InvitePageContent() {
 
   const token = searchParams?.get("token");
 
-  // If already authenticated, redirect to home
+  // If already authenticated, redirect to admin interface
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
-      router.replace("/");
+      router.replace("/admin");
     }
   }, [status, session, router]);
 

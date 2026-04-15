@@ -94,11 +94,17 @@ export async function POST(request: Request) {
     }
 
     // Send email
+    const requestUrl = new URL(request.url);
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    const originUrl = forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestUrl.origin;
+
     const emailResult = await sendInvitationEmail({
       to: email,
       invitationToken: token,
       role: roleMap[roleLevel] || "executive",
       invitedBy: user.email || "Admin",
+      baseUrl: originUrl,
     });
 
     if (!emailResult.success) {

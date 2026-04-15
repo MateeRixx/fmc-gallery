@@ -19,7 +19,8 @@ import { sendInvitationEmail } from "@/lib/email";
 async function createAndSendInvitation(
   target_email: string,
   target_role: string,
-  requester_email: string
+  requester_email: string,
+  baseUrl?: string
 ) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -55,6 +56,7 @@ async function createAndSendInvitation(
     invitationToken: data.token,
     role: target_role,
     invitedBy: requester_email,
+    baseUrl,
   });
 
   if (!emailResult.success) {
@@ -141,10 +143,16 @@ export async function POST(request: Request) {
     console.log(`📧 Creating invitation: ${requester_email} (${requester_role}) → ${normalized_email} (${normalized_role})`);
 
     // ===== CREATE & SEND INVITATION =====
+    const requestUrl = new URL(request.url);
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    const originUrl = forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestUrl.origin;
+
     const invitation = await createAndSendInvitation(
       normalized_email,
       normalized_role as "head" | "co_head" | "executive" | "member",
-      requester_email
+      requester_email,
+      originUrl
     );
 
     if (!invitation.success) {

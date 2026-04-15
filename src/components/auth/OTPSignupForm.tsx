@@ -221,7 +221,7 @@ export default function OTPSignupForm({
         email: email.toLowerCase().trim(),
         userId: data.userId,
         redirect: true,
-        callbackUrl: "/",
+        callbackUrl: "/admin", // Redirect newly signed-up admins to dashboard
       });
 
       if (signInResult?.error) {
