@@ -13,9 +13,9 @@
  * - New Executives are added: POST /api/admin/users { email: "newperson@example.com", role: "executive" }
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { requireSupremeAdmin } from "@/lib/auth-utils";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { User, UserRole, RoleChangeResponse } from "@/types";
 
 export async function PATCH(
@@ -131,21 +131,6 @@ export async function PATCH(
     const response: RoleChangeResponse = {
       success: true,
       message: `Successfully changed role from ${previousRole} to ${newRole}`,
-      user: updatedUser,
-      previousRole,
-      newRole,
-    };
-
-    return Response.json(response);
-  } catch (err) {
-    console.error("Error changing user role:", err);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
-ole}`,
       user: updatedUser,
       previousRole,
       newRole,

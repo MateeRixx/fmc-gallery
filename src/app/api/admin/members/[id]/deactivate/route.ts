@@ -7,7 +7,7 @@
  */
 
 import { requireAdmin, ForbiddenError } from "@/lib/auth-utils";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { canManageUser, getUserRoleLevel, ROLE_LEVELS } from "@/lib/membership-utils";
 
 export async function POST(
@@ -62,18 +62,6 @@ export async function POST(
       {
         success: true,
         message: "Member deactivated successfully",
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error("Error in POST /api/admin/members/[id]/deactivate:", error);
-    return Response.json(
-      { error: error.message || "Deactivation failed" },
-      { status: error.statusCode || 500 }
-    );
-  }
-}
-ber deactivated successfully",
       },
       { status: 200 }
     );

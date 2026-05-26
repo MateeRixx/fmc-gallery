@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { requirePermissionCompat } from "@/lib/auth-utils";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { Permission } from "@/types";
 
 type FacePayload = {
@@ -51,15 +51,6 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase.from("face_embeddings").insert(rows);
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
-    }
-
-    return Response.json({ ok: true, indexed: rows.length });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Index failed";
-    return Response.json({ error: msg }, { status: 500 });
-  }
-}
-urn Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ ok: true, indexed: rows.length });

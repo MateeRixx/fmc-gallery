@@ -10,7 +10,7 @@ import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
 import { generateOTP, storeOTP } from "@/lib/otp-utils";
 import { sendOTPEmail } from "@/lib/email";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const RequestOTPSchema = z.object({
   email: z.string().email("Invalid email format"),
@@ -50,7 +50,6 @@ async function handler(request: Request) {
           );
         }
       }
-    }
 
     // Generate OTP
     const otp = generateOTP();
@@ -98,15 +97,6 @@ async function handler(request: Request) {
     }
 
     return Response.json(
-      { error: "Failed to request OTP" },
-      { status: 500 }
-    );
-  }
-}
-
-// Rate limit: 100 requests per minute (standard config)
-export const POST = rateLimit(handler, rateLimitConfigs.standard);
-
       { error: "Failed to request OTP" },
       { status: 500 }
     );

@@ -8,8 +8,8 @@
  * Only Head and Co-Head can deactivate users
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireSupremeAdmin } from "@/lib/auth-utils";
 import { UserRole, RoleChangeResponse } from "@/types";
 
@@ -81,20 +81,6 @@ export async function POST(
       success: true,
       message: `Successfully deactivated ${targetUser.email}. All permissions revoked.`,
       user: updatedUser,
-      previousRole,
-      newRole: UserRole.INACTIVE,
-    };
-
-    return Response.json(response);
-  } catch (err) {
-    console.error("Error deactivating user:", err);
-    return Response.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
- updatedUser,
       previousRole,
       newRole: UserRole.INACTIVE,
     };
