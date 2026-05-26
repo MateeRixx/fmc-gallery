@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import Image from "next/image";
 import SyncMomentsClient from "./SyncMomentsClient";
 import MomentsGalleryClient from "./MomentsGalleryClient";
@@ -14,10 +14,7 @@ export default async function MomentsPage() {
     redirect("/visitor/login");
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = getSupabaseAdmin();
 
   // Get Visitor Profile ID
   const { data: profile } = await supabase

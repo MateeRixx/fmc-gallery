@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAuthCompat } from "@/lib/auth-utils";
 import { hasPermission, isSupremeAdmin } from "@/lib/rbac";
@@ -16,12 +16,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const form = await request.formData();
     const file = form.get("file") as File | null;

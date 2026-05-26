@@ -46,14 +46,7 @@ export async function PATCH(
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Get the user being promoted/demoted
     const { data: targetUser, error: fetchError } = await supabase
@@ -137,6 +130,21 @@ export async function PATCH(
     const response: RoleChangeResponse = {
       success: true,
       message: `Successfully changed role from ${previousRole} to ${newRole}`,
+      user: updatedUser,
+      previousRole,
+      newRole,
+    };
+
+    return Response.json(response);
+  } catch (err) {
+    console.error("Error changing user role:", err);
+    return Response.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+ole}`,
       user: updatedUser,
       previousRole,
       newRole,

@@ -137,7 +137,7 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
 
       if (cover) {
         const compressedCover = await imageCompression(cover, {
-          maxSizeMB: 1.5,
+          maxSizeMB: 0.7,
           maxWidthOrHeight: 1920,
           useWebWorker: true,
         });
@@ -147,7 +147,7 @@ export default function AdminForm({ eventId, editingId, onSuccess }: { eventId?:
       let heroImageUrl = existingHeroImage || null;
       if (heroImage) {
         const compressedHero = await imageCompression(heroImage, {
-          maxSizeMB: 1.5,
+          maxSizeMB: 0.7,
           maxWidthOrHeight: 1920,
           useWebWorker: true,
         });

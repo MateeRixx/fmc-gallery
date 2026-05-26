@@ -27,12 +27,8 @@ async function handler(request: Request) {
 
     // If it's a login request, ensure the user exists before sending an OTP
     // If it's a signup request, ensure the user DOES NOT exist
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (supabaseUrl && serviceRoleKey) {
-      const supabase = createClient(supabaseUrl, serviceRoleKey);
-      const { data: user, error } = await supabase
+    const supabase = getSupabaseAdmin();
+    const { data: user, error } = await supabase
         .from("users")
         .select("id")
         .eq("email", email)
@@ -102,6 +98,15 @@ async function handler(request: Request) {
     }
 
     return Response.json(
+      { error: "Failed to request OTP" },
+      { status: 500 }
+    );
+  }
+}
+
+// Rate limit: 100 requests per minute (standard config)
+export const POST = rateLimit(handler, rateLimitConfigs.standard);
+
       { error: "Failed to request OTP" },
       { status: 500 }
     );

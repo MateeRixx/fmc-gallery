@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { searchFacesByFaceId } from "@/lib/awsRekognition";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabase = getSupabaseAdmin();
 
 // Process one face matching job at a time
 export async function POST(req: NextRequest) {

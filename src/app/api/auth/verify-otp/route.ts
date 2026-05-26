@@ -6,7 +6,7 @@
  * Rate Limited: 20 requests per minute per IP
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyOTP, markOTPAsUsed } from "@/lib/otp-utils";
 import { createMembership, hasHead, ROLE_LEVELS } from "@/lib/membership-utils";
 import { MASTER_EMAIL } from "@/lib/config";
@@ -57,67 +57,62 @@ async function handler(request: Request) {
       );
     }
 
+    const supabase = getSupabaseAdmin();
+
     // ===== DETERMINE ROLE LEVEL =====
     let roleLevel: number = ROLE_LEVELS.VISITOR; // Default to visitor
 
     // Check for invitation
     let invitedRole: number | null = null;
     if (invitationToken) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      // Validate invitation
+      const { data: invitation, error: invError } = await supabase
+        .from("invitations")
+        .select("id, email, role, expires_at, is_used")
+        .eq("token", invitationToken)
+        .eq("is_used", false)
+        .maybeSingle();
 
-      if (supabaseUrl && serviceRoleKey) {
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-        // Validate invitation
-        const { data: invitation, error: invError } = await supabase
-          .from("invitations")
-          .select("id, email, role, expires_at, is_used")
-          .eq("token", invitationToken)
-          .eq("is_used", false)
-          .maybeSingle();
-
-        if (invError) {
-          console.error("Error validating invitation:", invError);
-          return Response.json(
-            { error: "Invalid invitation" },
-            { status: 403 }
-          );
-        }
-
-        if (!invitation) {
-          return Response.json(
-            { error: "Invitation not found or already used" },
-            { status: 403 }
-          );
-        }
-
-        // Check expiry
-        if (new Date(invitation.expires_at) < new Date()) {
-          return Response.json(
-            { error: "Invitation has expired" },
-            { status: 403 }
-          );
-        }
-
-        // Check email matches
-        if (invitation.email.toLowerCase() !== email) {
-          return Response.json(
-            { error: "Invitation email does not match" },
-            { status: 403 }
-          );
-        }
-
-        // Convert role string to level
-        const roleMap: Record<string, number> = {
-          head: ROLE_LEVELS.HEAD,
-          co_head: ROLE_LEVELS.CO_HEAD,
-          executive: ROLE_LEVELS.EXECUTIVE,
-          member: ROLE_LEVELS.EXECUTIVE, // member treated as executive
-        };
-        invitedRole = roleMap[invitation.role] ?? ROLE_LEVELS.EXECUTIVE;
-        roleLevel = invitedRole;
+      if (invError) {
+        console.error("Error validating invitation:", invError);
+        return Response.json(
+          { error: "Invalid invitation" },
+          { status: 403 }
+        );
       }
+
+      if (!invitation) {
+        return Response.json(
+          { error: "Invitation not found or already used" },
+          { status: 403 }
+        );
+      }
+
+      // Check expiry
+      if (new Date(invitation.expires_at) < new Date()) {
+        return Response.json(
+          { error: "Invitation has expired" },
+          { status: 403 }
+        );
+      }
+
+      // Check email matches
+      if (invitation.email.toLowerCase() !== email) {
+        return Response.json(
+          { error: "Invitation email does not match" },
+          { status: 403 }
+        );
+      }
+
+      // Convert role string to level
+      const roleMap: Record<string, number> = {
+        head: ROLE_LEVELS.HEAD,
+        co_head: ROLE_LEVELS.CO_HEAD,
+        executive: ROLE_LEVELS.EXECUTIVE,
+        member: ROLE_LEVELS.EXECUTIVE, // member treated as executive
+      };
+      invitedRole = roleMap[invitation.role] ?? ROLE_LEVELS.EXECUTIVE;
+      roleLevel = invitedRole;
     } else {
       // No invitation - check if bootlegged as HEAD
       const isMaster = email === MASTER_EMAIL.toLowerCase();
@@ -137,18 +132,6 @@ async function handler(request: Request) {
     }
 
     // ===== CREATE OR UPDATE USER =====
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
       .from("users")
@@ -317,19 +300,13 @@ async function handler(request: Request) {
 
     // ===== MARK INVITATION AS USED =====
     if (invitationToken) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (supabaseUrl && serviceRoleKey) {
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
-        await supabase
-          .from("invitations")
-          .update({
-            is_used: true,
-            used_at: new Date().toISOString(),
-          })
-          .eq("token", invitationToken);
-      }
+      await supabase
+        .from("invitations")
+        .update({
+          is_used: true,
+          used_at: new Date().toISOString(),
+        })
+        .eq("token", invitationToken);
     }
 
     // ===== MARK OTP AS USED =====

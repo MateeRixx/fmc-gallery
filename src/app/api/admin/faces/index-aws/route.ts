@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { requirePermissionCompat } from "@/lib/auth-utils";
 import { Permission } from "@/types";
 import { indexFacesFromImageBytes, searchUsersByFaceId } from "@/lib/awsRekognition";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
@@ -33,13 +33,7 @@ export async function POST(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const body = await request.json();
     const photos = body?.photos as AwsIndexPhotoPayload[] | undefined;

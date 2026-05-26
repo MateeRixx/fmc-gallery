@@ -38,17 +38,7 @@ export async function POST(
       throw new ForbiddenError("Only HEAD can deactivate another HEAD");
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Deactivate membership
     const { error } = await supabase
@@ -72,6 +62,18 @@ export async function POST(
       {
         success: true,
         message: "Member deactivated successfully",
+      },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error("Error in POST /api/admin/members/[id]/deactivate:", error);
+    return Response.json(
+      { error: error.message || "Deactivation failed" },
+      { status: error.statusCode || 500 }
+    );
+  }
+}
+ber deactivated successfully",
       },
       { status: 200 }
     );

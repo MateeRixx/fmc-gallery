@@ -1,20 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
 import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
 import { ClusterPhotosSchema, validationErrorResponse } from "@/lib/validate";
 import { z } from "zod";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function handler(
   request: Request,
   { params }: { params: Promise<{ clusterId: string }> }
 ) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
     const { clusterId: clusterIdRaw } = await params;
     const clusterId = Number(clusterIdRaw);
 

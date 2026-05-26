@@ -3,7 +3,7 @@
  * Handles role determination, membership status, and lifecycle
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "./supabaseAdmin";
 
 // Role level constants
 export const ROLE_LEVELS = {
@@ -26,14 +26,7 @@ export const ROLE_LEVEL_NAMES: Record<number, string> = {
  */
 export async function getUserMembership(userId: string) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return null;
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("memberships")
@@ -79,14 +72,7 @@ export async function createMembership(
   roleLevel: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Check if membership exists
     const { data: existing, error: checkError } = await supabase
@@ -146,14 +132,7 @@ export async function deactivateMembership(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
       .from("memberships")
@@ -239,14 +218,7 @@ export async function canAssignRole(
  */
 export async function hasHead(): Promise<boolean> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return false;
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("memberships")
@@ -272,14 +244,7 @@ export async function hasHead(): Promise<boolean> {
  */
 export async function getHeadUser() {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return null;
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("memberships")
@@ -315,14 +280,7 @@ export async function transferHead(
   newHeadId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Verify current user is HEAD
     const currentLevel = await getUserRoleLevel(currentHeadId);

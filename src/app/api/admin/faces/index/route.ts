@@ -16,12 +16,7 @@ export async function POST(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const body = await request.json();
     const faces = body?.faces as FacePayload[] | undefined;
@@ -56,6 +51,15 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase.from("face_embeddings").insert(rows);
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ ok: true, indexed: rows.length });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Index failed";
+    return Response.json({ error: msg }, { status: 500 });
+  }
+}
+urn Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ ok: true, indexed: rows.length });

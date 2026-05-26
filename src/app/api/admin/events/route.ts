@@ -16,38 +16,12 @@ function normalizeId(raw: unknown): string | number | null {
   return null;
 }
 
-async function getSupabase() {
-  try {
-    return await getSupabaseServer();
-  } catch (err) {
-    if (err instanceof Error) {
-      console.error("Supabase initialization failed:", err.message);
-    } else {
-      console.error("Supabase initialization failed:", err);
-    }
-    throw err;
-  }
-}
-
-function getSupabaseWrite() {
-  try {
-    return getSupabaseAdmin();
-  } catch (err) {
-    if (err instanceof Error) {
-      console.error("Supabase admin initialization failed:", err.message);
-    } else {
-      console.error("Supabase admin initialization failed:", err);
-    }
-    throw err;
-  }
-}
-
 export async function GET(request: NextRequest) {
   const user = await requireExecutiveCompat(request);
   if (user instanceof Response) return user;
 
   try {
-    const supabase = await getSupabase();
+    const supabase = await getSupabaseServer();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     if (idParam) {
@@ -86,14 +60,11 @@ export async function POST(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabase = getSupabaseWrite();
+    const supabase = getSupabaseAdmin();
     const body = await request.json();
     const { title, slug, description, starts_at, cover_url, hero_image_url } = body || {};
     
-    console.log("POST /api/admin/events - Received:", { title, slug, description, starts_at });
-    
     if (!title || !slug || !description) {
-      console.error("Missing required fields");
       return Response.json({ error: "Missing fields: title, slug, description" }, { status: 400 });
     }
 
@@ -114,17 +85,12 @@ export async function POST(request: NextRequest) {
       row.hero_image_url = hero_image_url.trim();
     }
 
-    console.log("Inserting into events table:", row);
-    
     const { data, error } = await supabase.from("events").insert(row).select();
 
     if (error) {
       console.error("Insert error:", error);
-      console.error("Row being inserted:", row);
       return Response.json({ error: "Failed to create event" }, { status: 500 });
     }
-
-    console.log("Successfully inserted event:", data);
 
     // Revalidate cache after event creation
     if (data && data.length > 0) {
@@ -145,7 +111,7 @@ export async function PUT(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabase = getSupabaseWrite();
+    const supabase = getSupabaseAdmin();
     const body = await request.json();
     const { id: rawId, title, slug, description, starts_at, cover_url, hero_image_url } = body || {};
     const id = normalizeId(rawId);
@@ -184,7 +150,7 @@ export async function DELETE(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabase = getSupabaseWrite();
+    const supabase = getSupabaseAdmin();
     const url = new URL(request.url);
     const idParam = url.searchParams.get("id");
     let id: string | number | null = idParam ? normalizeId(idParam) : null;

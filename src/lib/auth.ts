@@ -1,24 +1,12 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "./supabaseAdmin";
 import { MASTER_EMAIL } from "./config";
 import {
   getUserMembership,
   getUserRoleLevel,
   ROLE_LEVEL_NAMES,
 } from "./membership-utils";
-
-// Debug: Check env vars are loaded
-console.log("=== NextAuth Environment Check ===");
-console.log("NEXTAUTH_URL:", process.env.NEXTAUTH_URL);
-console.log("NEXTAUTH_SECRET:", process.env.NEXTAUTH_SECRET ? "✓ SET" : "✗ MISSING");
-console.log("RESEND_API_KEY:", process.env.RESEND_API_KEY ? "✓ SET" : "✗ MISSING");
-console.log("EMAIL_FROM:", process.env.EMAIL_FROM);
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -35,6 +23,8 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.userId) {
           return null;
         }
+
+        const supabase = getSupabaseAdmin();
 
         // Fetch user from database
         const { data: user, error } = await supabase
@@ -77,6 +67,7 @@ export const authOptions: NextAuthOptions = {
           const membership = await getUserMembership(token.userId as string);
           const roleLevel = await getUserRoleLevel(token.userId as string);
           
+          const supabase = getSupabaseAdmin();
           const { data: userRec } = await supabase
             .from("users")
             .select("role, permissions")

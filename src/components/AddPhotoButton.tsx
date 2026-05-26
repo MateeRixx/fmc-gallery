@@ -402,7 +402,7 @@ export default function AddPhotoButton({ eventSlug }: { eventSlug: string }) {  
                 </div>
                 <div className="p-4 bg-gray-800 rounded-lg min-h-12">
                   <p className="text-sm text-gray-300">
-                    {driveStatus || "Photos are downloaded server-side and stored in Supabase. Up to 300 images per import."}
+                    {driveStatus || "Photos are downloaded server-side, compressed, and uploaded to S3 + CloudFront CDN. Up to 300 images per import."}
                   </p>
                   {driveBusy && driveProgress > 0 && (
                     <div className="mt-3 space-y-2">

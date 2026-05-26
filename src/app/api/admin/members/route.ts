@@ -7,7 +7,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth-utils";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request: Request) {
   try {
@@ -19,17 +19,7 @@ export async function GET(request: Request) {
     const pageSize = 50;
     const offset = (page - 1) * pageSize;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Get total count
     const { count } = await supabase

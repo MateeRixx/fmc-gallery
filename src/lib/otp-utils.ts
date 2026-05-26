@@ -3,7 +3,7 @@
  * Handles OTP generation, storage, verification
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "./supabaseAdmin";
 
 /**
  * Generate a random 6-digit OTP
@@ -20,14 +20,7 @@ export async function storeOTP(
   otp: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Check for existing non-expired OTPs for this email
     const { data: existing } = await supabase
@@ -80,14 +73,7 @@ export async function verifyOTP(
   otp: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Find matching OTP
     const { data: otpRecord, error: fetchError } = await supabase
@@ -147,13 +133,6 @@ export async function markOTPAsUsed(
   otp: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { success: false, error: "Database not configured" };
-    }
-
     // Already marked as verified during verification
     // This is a no-op for consistency with existing code
     return { success: true };
@@ -170,14 +149,7 @@ export async function getLatestOTP(
   email: string
 ): Promise<{ exists: boolean; error?: string }> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return { exists: false, error: "Database not configured" };
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("otp_codes")

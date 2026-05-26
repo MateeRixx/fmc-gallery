@@ -17,14 +17,14 @@ export default function EventCarousel({ events, cardsRef, onSlideChange }: Props
   const sanitize = (u?: string | null) => (u || '').trim().replace(/\)+$/, '');
 
   return (
-    <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center">
+    <div ref={cardsRef} className="relative mt-8 h-[68vh] md:h-[70vh] flex items-center justify-center overflow-hidden">
       <Swiper
         modules={[Navigation]}
         spaceBetween={24}
         slidesPerView={1}
         centeredSlides
         navigation={{ prevEl: '.prev', nextEl: '.next' }}
-        className="h-auto overflow-visible"
+        className="h-auto"
         onSlideChange={(s) => {
           const ev = events[s.activeIndex];
           const bg = sanitize(ev?.hero_image_url || ev?.cover_url) || '/images/hero.jpg';
@@ -32,7 +32,7 @@ export default function EventCarousel({ events, cardsRef, onSlideChange }: Props
         }}
       >
         {events.map((ev, index) => (
-          <SwiperSlide key={ev.id}>
+          <SwiperSlide key={ev.id} className="[transform:translateZ(0)] [backface-visibility:hidden]">
             <EventCardBasic event={{ slug: ev.slug, title: ev.title || '', description: ev.description || '', cover_url: ev.cover_url, delay: index * 0.15 }} />
           </SwiperSlide>
         ))}

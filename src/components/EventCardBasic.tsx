@@ -40,7 +40,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
         whileInView={{ opacity: 1 }}
         transition={{ duration: 1, delay: event.delay || 0, ease: "easeInOut" }}
         viewport={{ once: true }}
-        className="cursor-pointer w-[17.6rem] md:w-88] mx-auto my-8 md:my-12 bg-white rounded-3xl overflow-hidden shadow-2xl transition-transform duration-200 group-hover:scale-[1.08]"
+        className="cursor-pointer w-[17.6rem] md:w-88] mx-auto my-8 md:my-12 bg-white rounded-3xl overflow-hidden shadow-2xl transition-transform duration-200 group-hover:scale-[1.08] [transform:translateZ(0)] [backface-visibility:hidden]"
         style={{
           boxShadow: `0 2rem 3rem rgba(0,0,0,0.1)`,
         }}
@@ -57,7 +57,7 @@ export default function EventCardBasic({ event }: { event: EventBasic }) {
           }
         }}
       >
-        <div className="relative aspect-4/5">
+        <div className="relative aspect-[4/5]">
           <Image
             src={cover}
             alt={event?.title || "Event image"}

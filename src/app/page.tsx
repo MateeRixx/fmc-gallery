@@ -92,7 +92,7 @@ export default function Home() {
           alt="Hero"
           fill
           priority
-          quality={70}
+          quality={75}
           sizes="100vw"
           className="object-cover"
           placeholder="blur"
@@ -108,7 +108,7 @@ export default function Home() {
       <HeroSection onExploreClick={scrollToEvents} />
 
       {/* EVENTS SECTION */}
-      <section id="events" ref={eventsRef} className="relative py-32">
+      <section id="events" ref={eventsRef} className="relative py-32 overflow-hidden">
         <div className="max-w-7xl mx-auto px-8">
           <h2 className="text-center text-8xl md:text-9xl font-black text-white mb-20">
             Our Events

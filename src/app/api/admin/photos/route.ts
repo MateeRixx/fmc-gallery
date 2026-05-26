@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requirePermissionCompat } from "@/lib/auth-utils";
@@ -9,12 +9,7 @@ export async function POST(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const body = await request.json();
     const { event_id, event_slug, urls } = body || {};
@@ -81,12 +76,7 @@ export async function DELETE(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
       const body = await request.json();
       const { photo_id, photo_ids, photo_paths, event_slug } = body || {};

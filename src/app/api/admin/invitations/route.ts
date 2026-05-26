@@ -6,7 +6,7 @@
  */
 
 import { requireAuth } from "@/lib/auth-utils";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request: Request) {
   try {
@@ -14,17 +14,7 @@ export async function GET(request: Request) {
     const user = await requireAuth();
 
     // ===== GET INVITATIONS =====
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Get invitations created by this user, sorted by newest first
     const { data: invitations, error } = await supabase

@@ -10,10 +10,10 @@
 
 import { requireAuth } from "@/lib/auth-utils";
 import { canInviteRole } from "@/lib/roleDefaults";
-import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { sendInvitationEmail } from "@/lib/email";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Helper function to create and send invitation (replaces createAndSendInvitation from otp.ts)
 async function createAndSendInvitation(
@@ -22,14 +22,7 @@ async function createAndSendInvitation(
   requester_email: string,
   baseUrl?: string
 ) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return { success: false, error: "Database not configured" };
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = getSupabaseAdmin();
   const token = uuidv4();
   const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 

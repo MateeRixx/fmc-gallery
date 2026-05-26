@@ -1,6 +1,6 @@
 // src/app/events/page.tsx
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 import Navbar from "@/components/Navbar";
 import EventCard from "@/components/EventCard";
 import { type Event } from "@/types";
@@ -9,30 +9,25 @@ import { type Event } from "@/types";
 export const revalidate = 3600;
 
 async function getEvents(): Promise<Event[]> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try {
+    const supabase = await getSupabaseServer();
 
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase configuration missing");
+    const { data, error } = await supabase
+      .from("events")
+      .select("id, slug, title, description, cover_url, starts_at")
+      .neq("slug", "profile-photos")
+      .order("starts_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching events:", error);
+      return [];
+    }
+
+    return (data || []) as Event[];
+  } catch (err) {
+    console.error("Supabase configuration missing or error:", err);
     return [];
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false },
-  });
-
-  const { data, error } = await supabase
-    .from("events")
-    .select("id, slug, title, description, cover_url, starts_at")
-    .neq("slug", "profile-photos")
-    .order("starts_at", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching events:", error);
-    return [];
-  }
-
-  return (data || []) as Event[];
 }
 
 export const metadata = {

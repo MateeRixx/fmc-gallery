@@ -9,7 +9,7 @@
  * Rate Limited: 20 requests per minute (strict)
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { MASTER_EMAIL } from "@/lib/config";
 import { rateLimit, rateLimitConfigs } from "@/lib/rate-limit";
 import { SignUpSchema, validationErrorResponse } from "@/lib/validate";
@@ -34,6 +34,8 @@ async function handler(request: Request) {
     const normalized_email = email.toLowerCase().trim();
     const normalized_role = role.toLowerCase();
 
+    const supabase = getSupabaseAdmin();
+
     // ===== SECURITY CHECK: Head/Co-Head require invitation (EXCEPT MASTER) =====
     const isMaster = normalized_email === MASTER_EMAIL.toLowerCase();
 
@@ -47,68 +49,47 @@ async function handler(request: Request) {
         );
       }
 
-      // Get service role key for invitation validation
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      // Validate invitation token exists and is valid
+      const { data: inv_data, error: inv_error } = await supabase
+        .from("invitations")
+        .select("id, email, role, expires_at")
+        .eq("token", invitation_token)
+        .single();
 
-      if (supabaseUrl && serviceRoleKey) {
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+      if (inv_error || !inv_data) {
+        return Response.json(
+          { error: "Invalid or expired invitation token" },
+          { status: 403 }
+        );
+      }
 
-        // Validate invitation token exists and is valid
-        const { data: inv_data, error: inv_error } = await supabase
-          .from("invitations")
-          .select("id, email, role, expires_at")
-          .eq("token", invitation_token)
-          .single();
+      // Verify token hasn't expired
+      const expiresAt = new Date(inv_data.expires_at);
+      if (expiresAt < new Date()) {
+        return Response.json(
+          { error: "Invitation token has expired" },
+          { status: 403 }
+        );
+      }
 
-        if (inv_error || !inv_data) {
-          return Response.json(
-            { error: "Invalid or expired invitation token" },
-            { status: 403 }
-          );
-        }
+      // Verify token email matches signup email
+      if (inv_data.email?.toLowerCase() !== normalized_email) {
+        return Response.json(
+          { error: "Invitation email does not match signup email" },
+          { status: 403 }
+        );
+      }
 
-        // Verify token hasn't expired
-        const expiresAt = new Date(inv_data.expires_at);
-        if (expiresAt < new Date()) {
-          return Response.json(
-            { error: "Invitation token has expired" },
-            { status: 403 }
-          );
-        }
-
-        // Verify token email matches signup email
-        if (inv_data.email?.toLowerCase() !== normalized_email) {
-          return Response.json(
-            { error: "Invitation email does not match signup email" },
-            { status: 403 }
-          );
-        }
-
-        // Verify token is for matching role
-        if (inv_data.role !== normalized_role) {
-          return Response.json(
-            {
-              error: `Invitation is for ${inv_data.role} role, not ${normalized_role}`,
-            },
-            { status: 403 }
-          );
-        }
+      // Verify token is for matching role
+      if (inv_data.role !== normalized_role) {
+        return Response.json(
+          {
+            error: `Invitation is for ${inv_data.role} role, not ${normalized_role}`,
+          },
+          { status: 403 }
+        );
       }
     }
-
-    // ===== CREATE/UPDATE USER IN DATABASE =====
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Check if user already exists
     const { data: existing_user, error: lookup_error } = await supabase
@@ -174,4 +155,3 @@ async function handler(request: Request) {
 
 // Apply rate limiting: 20 requests per minute per IP
 export const POST = rateLimit(handler, rateLimitConfigs.strict);
-

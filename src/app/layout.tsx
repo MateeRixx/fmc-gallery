@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
-import './globals.css'
+
 import SessionProvider from "@/components/providers/SessionProvider";
 
 export const metadata: Metadata = {

@@ -5,7 +5,7 @@
  * Only Head and Co-Head can access this
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextRequest } from "next/server";
 import { requireSupremeAdmin } from "@/lib/auth-utils";
 import { Permission, User, UserRole } from "@/types";
@@ -16,14 +16,7 @@ export async function GET(request: NextRequest) {
   if (user instanceof Response) return user;
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Get all users
     const { data, error } = await supabase
@@ -74,14 +67,7 @@ export async function POST(request: NextRequest) {
       typeof perm === "string" && allowedPerms.has(perm as Permission)
     ) as Permission[];
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     const newUser: Partial<User> = {
       id: crypto.randomUUID(),

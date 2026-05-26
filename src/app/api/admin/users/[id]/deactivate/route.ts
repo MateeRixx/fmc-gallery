@@ -38,14 +38,7 @@ export async function POST(
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return Response.json({ error: "Service misconfigured" }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = getSupabaseAdmin();
 
     // Get the user being deactivated
     const { data: targetUser, error: fetchError } = await supabase
@@ -88,6 +81,20 @@ export async function POST(
       success: true,
       message: `Successfully deactivated ${targetUser.email}. All permissions revoked.`,
       user: updatedUser,
+      previousRole,
+      newRole: UserRole.INACTIVE,
+    };
+
+    return Response.json(response);
+  } catch (err) {
+    console.error("Error deactivating user:", err);
+    return Response.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+ updatedUser,
       previousRole,
       newRole: UserRole.INACTIVE,
     };
